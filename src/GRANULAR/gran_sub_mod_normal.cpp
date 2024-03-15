@@ -17,6 +17,7 @@
 #include "math_const.h"
 
 #include <cmath>
+#include <iostream>
 
 using namespace LAMMPS_NS;
 using namespace Granular_NS;
@@ -380,3 +381,275 @@ void GranSubModNormalJKR::set_fncrit()
 {
   Fncrit = fabs(Fne + 2.0 * F_pulloff);
 }
+
+/* ----------------------------------------------------------------------
+   MDR contact model
+------------------------------------------------------------------------- */
+
+GranSubModNormalMDR::GranSubModNormalMDR(GranularModel *gm, LAMMPS *lmp) :
+    GranSubModNormal(gm, lmp)
+{
+  num_coeffs = 6; // Young's Modulus, Poisson's ratio, yield stress, effective surface energy, psi_b, coefficent of restitution
+  contact_radius_flag = 1;
+  size_history = 22;
+
+  nondefault_history_transfer = 1;
+  transfer_history_factor = new double[size_history];
+  transfer_history_factor[0] = +1;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void GranSubModNormalMDR::coeffs_to_local()
+{
+  E = coeffs[0];      // Young's modulus
+  nu = coeffs[1];     // Poisson's ratio
+  Y = coeffs[2];      // yield stress
+  gamma = coeffs[3];  // effective surface energy
+  psi_b = coeffs[4];  // bulk response trigger based on ratio of remaining free area: A_{free}/A_{total}
+  CoR = coeffs[5];    // coefficent of restitution
+
+  if (E <= 0.0) error->all(FLERR, "Illegal MDR normal model, Young's modulus must be greater than 0");
+  if (nu < 0.0 || nu > 0.5) error->all(FLERR, "Illegal MDR normal model, Poisson's ratio must be between 0 and 0.5");
+  if (Y < 0.0) error->all(FLERR, "Illegal MDR normal model, yield stress must be greater than or equal to 0");
+  if (gamma < 0.0) error->all(FLERR, "Illegal MDR normal model, effective surface energy must be greater than or equal to 0");
+  if (psi_b < 0.0 || psi_b > 1.0) error->all(FLERR, "Illegal MDR normal model, psi_b must be between 0 and 1.0");
+  if (CoR < 0.0 || CoR > 1.0) error->all(FLERR, "Illegal MDR normal model, coefficent of restitution must be between 0 and 1.0");
+}
+
+/* ---------------------------------------------------------------------- */
+
+double GranSubModNormalMDR::calculate_forces()
+
+{
+  // To understand the structure of the overall code it is important to consider 
+  // the following:
+  //
+  // The MDR contact model was developed by imagining indivdual particles being 
+  // squished between a number of rigid flats (references below). To allow  
+  // for many interacting particles, we extend the idea of isolated particles surrounded 
+  // by rigid flats. In particular, we imagine placing rigid flats at the overlap 
+  // midpoints between particles. The force is calculated seperately on both sides
+  // of the contact assuming interaction with a rigid flat. The two forces are then 
+  // averaged on either side of the contact to determine the final force. If the 
+  // contact is between a particle and wall then only one force evaluation is required.
+  //  
+  // Zunker and Kamrin, 2024, Part I: https://doi.org/10.1016/j.jmps.2023.105492
+  // Zunker and Kamrin, 2024, Part II: https://doi.org/10.1016/j.jmps.2023.105493
+
+  const int i_true = gm->i;           // true i particle index
+  const int j_true = gm->j;           // true j particle index
+  const double radi_true = gm->radi;  // true i particle initial radius
+  const double radj_true = gm->radj;  // true j particle initial radius
+
+  double F;                  // average force 
+  double F0;                 // force on contact side 0
+  double F1;                 // force on contact side 1
+  double delta = gm->delta;  // apparent overlap
+  if (gm->contact_type == PAIR) delta = gm->delta/2.0; // half displacement to imagine interaction with rigid flat 
+  
+  // initialize indexing in history array of different variables 
+  const int delta_offset_0 = 0;           // apparent overlap 
+  const int delta_offset_1 = 1;           
+  const int deltao_offset_0 = 2;          // displacement 
+  const int deltao_offset_1 = 3;  
+  const int delta_MDR_offset_0 = 4;       // MDR apparent overlap
+  const int delta_MDR_offset_1 = 5;
+  const int delta_BULK_offset_0 = 6;      // bulk displacement
+  const int delta_BULK_offset_1 = 7;
+  const int deltamax_MDR_offset_0 = 8;    // maximum MDR apparent overlap 
+  const int deltamax_MDR_offset_1 = 9;
+  const int Yflag_offset_0 = 10;          // yield flag
+  const int Yflag_offset_1 = 11;
+  const int deltaY_offset_0 = 12;         // yield displacement
+  const int deltaY_offset_1 = 13;
+  const int cA_offset_0 = 14;             // contact area intercept
+  const int cA_offset_1 = 15;
+  const int aAdh_offset_0 = 16;           // adhesive contact radius
+  const int aAdh_offset_1 = 17;
+  const int Ac_offset_0 = 18;             // contact area
+  const int Ac_offset_1 = 19;
+  const int eps_bar_offset_0 = 20;        // volume-averaged infinitesimal strain tensor
+  const int eps_bar_offset_1 = 21;
+
+  for (int contactSide = 0; contactSide < 2; contactSide++) { 
+
+    double * history = & gm->history[history_index]; // load in all history variables   
+    double * delta_offset; 
+    double * deltao_offset;
+    double * delta_MDR_offset;   
+    double * delta_BULK_offset; 
+    double * deltamax_MDR_offset; 
+    double * Yflag_offset; 
+    double * deltaY_offset; 
+    double * cA_offset;
+    double * aAdh_offset; 
+    double * Ac_offset; 
+    double * eps_bar_offset; 
+     
+    if (contactSide == 0) {
+      if (gm->contact_type == PAIR) {
+        gm->i = j_true;
+        gm->j = i_true;
+        gm->radi = radj_true;
+        gm->radj = radi_true;
+      }
+      delta_offset = & history[delta_offset_0];
+      deltao_offset = & history[deltao_offset_0];
+      delta_MDR_offset = & history[delta_MDR_offset_0];
+      delta_BULK_offset = & history[delta_BULK_offset_0];
+      deltamax_MDR_offset = & history[deltamax_MDR_offset_0];
+      Yflag_offset = & history[Yflag_offset_0];
+      deltaY_offset = & history[deltaY_offset_0];
+      cA_offset = & history[cA_offset_0];
+      aAdh_offset = & history[aAdh_offset_0];
+      Ac_offset = & history[Ac_offset_0];
+      eps_bar_offset = & history[eps_bar_offset_0];
+    } else {
+      if (gm->contact_type != PAIR) break; // contact with particle-wall requires only one evaluation
+      gm->i = i_true;
+      gm->j = j_true;
+      gm->radi = radi_true;
+      gm->radj = radj_true;
+      delta_offset = & history[delta_offset_1];
+      deltao_offset = & history[deltao_offset_1];
+      delta_MDR_offset = & history[delta_MDR_offset_1];
+      delta_BULK_offset = & history[delta_BULK_offset_1];
+      deltamax_MDR_offset = & history[deltamax_MDR_offset_1];
+      Yflag_offset = & history[Yflag_offset_1];
+      deltaY_offset = & history[deltaY_offset_1];
+      cA_offset = & history[cA_offset_1];
+      aAdh_offset = & history[aAdh_offset_1];
+      Ac_offset = & history[Ac_offset_1];
+      eps_bar_offset = & history[eps_bar_offset_1];
+    }
+
+    // material and geometric property definitions
+    // E, nu, Y gamma , psi_b, and CoR are already defined.
+    const double G = E/(2.0*(1.0+nu));          // shear modulus
+    const double kappa = E/(3.0*(1.0-2.0*nu));  // bulk modulus
+    const double Eeff = E/(1.0-pow(nu,2.0));    // composite plane strain modulus
+
+    const double Ro = gm->radi;                 // initial radius
+    const double R = Ro;                        // apparent radius UPDATE ONCE WE HAVE PARTICLE HISTORY VARIABLES
+    //double * const radc_i = radc[sidata.i];
+    //double R = radc_i[0];  // current radiu
+
+    // kinematics UPDATE ONCE WE HAVE PARTICLE HISTORY VARIABLES
+    const double ddelta = delta - *delta_offset;
+    *delta_offset = delta;
+
+    const double deltao = delta - (R - Ro);
+    const double ddeltao = deltao - *deltao_offset;
+    *deltao_offset = deltao;
+
+    // add in particle volume and deformed particle volume initializations ONCE WE HAVE PARTICLE HISTORY VARIABLES
+
+    double Acon = 0.0;
+    double Atot = 1.0;
+    double Afree = Atot - Acon;
+    double psi = Afree/Atot;
+    double ddelta_bar = 0.0;
+    double ddelta_MDR;
+    double ddelta_BULK;
+    if ( psi < psi_b ) { // if true, bulk response has triggered, split displacement increment between the MDR and BULK components 
+      ddelta_MDR = std::min(ddelta-ddelta_bar, delta-*delta_MDR_offset);
+      ddelta_BULK = ddelta_bar;
+    } else { // if false, no bulk response, full displacement increment goes to the MDR component
+      ddelta_BULK = 0.0;
+      ddelta_MDR = ddelta;
+    }
+    const double delta_MDR = *delta_MDR_offset + ddelta_MDR; // MDR displacement
+    *delta_MDR_offset = delta_MDR; // Update old MDR displacement
+    const double delta_BULK = std::max(0.0,*delta_BULK_offset+ddelta_BULK);
+    *delta_BULK_offset = delta_BULK;
+
+    if (delta > *deltamax_MDR_offset) *deltamax_MDR_offset = delta;
+    const double deltamax_MDR = *deltamax_MDR_offset;
+
+    const double pY = Y*(1.75*exp(-4.4*deltamax_MDR/R) + 1.0); // Set value of average pressure along yield surface
+    if ( *Yflag_offset == 0.0 && delta_MDR >= deltamax_MDR ) {
+    const double phertz = 4*Eeff*sqrt(delta_MDR)/(3*M_PI*sqrt(R));
+      if ( phertz > pY ) {
+        *Yflag_offset = 1.0;
+        *deltaY_offset = delta_MDR;
+        *cA_offset = M_PI*(pow(*deltaY_offset,2.0) - *deltaY_offset*R);
+      }
+    } 
+
+    double A;                     // height of elliptical indenter
+    double B;                     // width of elliptical indenter
+    double deltae1D;              // transformed elastic displacement
+    double deltaR;                // displacement correction 
+    double amax;                  // maximum experienced contact radius
+    const double cA = *cA_offset; // contact area intercept
+
+    if ( *Yflag_offset == 0.0 ) { // elastic contact
+      A = 4.0*R;              
+      B = 2.0*R;              
+      deltae1D = delta_MDR;    
+      (deltae1D > 0) ?  amax = sqrt(deltae1D*R) : amax = 0.0;  
+    } else { // plastic contact
+      amax = sqrt((2.0*deltamax_MDR*R - pow(deltamax_MDR,2.0)) + cA/M_PI);              
+      A = 4.0*pY/Eeff*amax;                                                             
+      B = 2.0*amax;                                                                     
+      const double deltae1Dmax = A/2.0; // maximum transformed elastic displacement 
+      const double Fmax = Eeff*(A*B/4.0)*(acos(1.0 - 2.0*deltae1Dmax/A) - (1.0 - 2.0*deltae1Dmax/A)*sqrt(4.0*deltae1Dmax/A - 4.0*pow(deltae1Dmax,2.0)/pow(A,2.0))); // force caused by full submersion of elliptical indenter to depth of A/2
+      const double zR = R - (deltamax_MDR - deltae1Dmax); // depth of particle center
+      deltaR = (Fmax*(2*pow(amax,2.0)*(-1 + nu) - (-1 + 2*nu)*zR*(-zR + sqrt(pow(amax,2.0) + pow(zR,2.0)))))/((M_PI*pow(amax,2.0))*2*G*sqrt(pow(amax,2.0) + pow(zR,2.0))); 
+      deltae1D = (delta_MDR - deltamax_MDR + deltae1Dmax + deltaR)/(1 + deltaR/deltae1Dmax);  // transformed elastic displacement 
+    }
+    
+    // force calculation
+    double F_MDR;
+
+    if (gamma > 0.0) {
+      F_MDR = 0.0;
+    } else { 
+      (deltae1D <= 0.0) ? F_MDR = 0.0 : F_MDR = Eeff*(A*B/4.0)*(acos(1.0 - 2.0*deltae1D/A) - (1.0 - 2.0*deltae1D/A)*sqrt(4.0*deltae1D/A - 4.0*pow(deltae1D,2.0)/pow(A,2.0))); 
+        if ( std::isnan(F_MDR) ) std::cout << "F_MDR is NaN Flag 2" << std::endl;
+    }
+    
+    const double F_BULK = 0.0;
+    (contactSide == 0) ? F0 = F_MDR + F_BULK : F1 = F_MDR + F_BULK;
+  }
+  F = (F0 + F1)/2;
+  return F;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+// std::cout << "F is: " << F << std::endl;
+//std::cout << "gamma > 0.0: " << F_MDR << ", " << gm->i << ", " << gm->j << std::endl;
+//std::cout << "deltae1D <= 0.0: " << F_MDR << ", " << gm->i << ", " << gm->j << std::endl;
+//std::cout << "F_MDR should be > 0: " << F_MDR << ", " << gm->i << ", " << gm->j << std::endl;
+//std::cout << gm->i << ", " << gm->j << " || " << delta << ", " << delta_MDR << ", " << deltamax_MDR << ", " << deltae1D << " || " << A << ", " << B << std::endl;
+
+//std::cout << i_true << ", " << j_true << std::endl; 
+
+      //std::cout << history_index << ", " << history[0] << ", " << history[1] << ", " << history[2] << std::endl;
+
+      // initialize all history variables
+      //double delta_offset; 
+      //double deltao_offset;
+      //double delta_MDR_offset;   
+      //double delta_BULK_offset; 
+      //double deltamax_MDR_offset; 
+      //double Yflag; 
+      //double deltaY_offset; 
+      //double Ac_offset; 
+      //double aAdh_offset; 
+      //double deltap_offset; 
+      //double cA_offset; 
+      //double eps_bar_offset;
+      //double wall_contact_flag_offset;

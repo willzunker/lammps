@@ -1,0 +1,135 @@
+############################### SIMULATION SETTINGS ###################################################
+
+atom_style sphere 
+atom_modify map array 
+comm_modify vel yes
+units si
+newton off
+neighbor      6 bin
+neigh_modify  delay 0
+timestep 0.001
+
+######################### SIMULATION BOUNDING BOX, INTEGRATION, AND, GRAVITY ###########################
+
+boundary f f f
+region simBox block -100 100 -100 100 -100 100
+create_box 2 simBox
+
+########################### PARTICLE MATERIAL PROPERTIES AND FORCE MODEL ###############################
+
+pair_style granular
+pair_coeff * * hertz 1000.0 0.0 tangential linear_nohistory 0.0 0.0
+
+######################################### ADD IN PLANES ################################################
+
+group plane_yz_pos type 1
+group plane_yz_neg type 1
+fix plane_yz_pos plane_yz_pos wall/gran granular hertz 1000.0 0.0 tangential linear_nohistory 0.0 0.0 xplane 10 NULL 
+fix plane_yz_neg plane_yz_neg wall/gran granular hertz 1000.0 0.0 tangential linear_nohistory 0.0 0.0 xplane -10 NULL
+
+#fix plane_yz_pos all smd/wall_surface meshes/plane_yz_pos.stl 1 543210
+#run 0
+#fix plane_yz_neg all smd/wall_surface meshes/plane_yz_neg.stl 1 545210
+#run 0
+#pair_style smd/tri_surface 1.0
+#pair_coeff 1 1 hertz 1000.0  
+
+##################################### INSERT PARTICLES ####################################################
+
+create_atoms 1 single 0 0 0 units box
+group centerAtom id 1
+variable d equal 20
+variable den equal 1000
+set atom 1 diameter ${d} density ${den} 
+
+######################################## SCREEN OUTPUT  ####################################################
+
+compute       1 all erotate/sphere
+thermo_style  custom dt step atoms ke c_1 vol 
+thermo        1000
+thermo_modify lost ignore norm no
+
+##################################### DEFINE RUN CONTROL VARIBLES  #############################################
+
+# Linear movement
+variable mydt equal dt
+variable mystep equal step
+variable mytime equal ${mydt}*v_mystep
+variable ddelta equal ${d}/2000
+variable slope equal ${ddelta}/${mydt}
+variable disp equal ${slope}*v_mytime
+variable disp_neg equal -v_disp
+variable vel equal ${ddelta}/${mydt}
+variable vel_neg equal -${vel}
+variable zeroDisp equal 0.0
+
+variable deltaI     equal 1.25
+variable deltaII    equal 3.0
+variable deltaIII   equal 4.75
+variable deltaIV    equal 6.25
+
+variable stepsIload equal ${deltaI}/${ddelta}
+variable stepsIunload equal ${stepsIload}+${deltaI}/${ddelta} 
+variable stepsIIload equal ${stepsIunload}+${deltaII}/${ddelta}
+variable stepsIIunload equal ${stepsIIload}+${deltaII}/${ddelta} 
+variable stepsIIIload equal ${stepsIIunload}+${deltaIII}/${ddelta}
+variable stepsIIIunload equal ${stepsIIIload}+${deltaIII}/${ddelta} 
+variable stepsIVload equal ${stepsIIIunload}+${deltaIV}/${ddelta}
+variable stepsIVunload equal ${stepsIVload}+${deltaIV}/${ddelta} 
+
+fix cAtom centerAtom move variable v_zeroDisp NULL NULL NULL NULL NULL units box 
+
+##################################### SET UP DUMP OUTPUTS  ####################################################
+
+dump dumpParticles all vtk 1 post/particles_*.vtk x y z fx fy fz 
+dump dumpWalls 
+#dump dumpSTL all mesh/stl 10 post/walls_*.stl
+
+######################################### BEGIN RUN  ##########################################################
+
+fix move_plane_yz_pos_Iload plane_yz_pos move linear ${vel_neg} 0.0 0.0  
+fix move_plane_yz_neg_Iload plane_yz_neg move linear ${vel} 0.0 0.0 
+run ${stepsIload} upto
+
+#unfix move_plane_yz_pos_Iload
+#unfix move_plane_yz_neg_Iload
+#fix move_plane_yz_pos_Iunload all move/mesh mesh plane_yz_pos linear ${vel} 0.0 0.0  
+#fix move_plane_yz_neg_Iunload all move/mesh mesh plane_yz_neg linear ${vel_neg} 0.0 0.0 
+#run ${stepsIunload} upto
+#
+#unfix move_plane_yz_pos_Iunload
+#unfix move_plane_yz_neg_Iunload
+#fix move_plane_yz_pos_IIload all move/mesh mesh plane_yz_pos linear ${vel_neg} 0.0 0.0  
+#fix move_plane_yz_neg_IIload all move/mesh mesh plane_yz_neg linear ${vel} 0.0 0.0 
+#run ${stepsIIload} upto
+#
+#unfix move_plane_yz_pos_IIload
+#unfix move_plane_yz_neg_IIload
+#fix move_plane_yz_pos_IIunload all move/mesh mesh plane_yz_pos linear ${vel} 0.0 0.0  
+#fix move_plane_yz_neg_IIunload all move/mesh mesh plane_yz_neg linear ${vel_neg} 0.0 0.0 
+#run ${stepsIIunload} upto
+#
+#unfix move_plane_yz_pos_IIunload
+#unfix move_plane_yz_neg_IIunload
+#fix move_plane_yz_pos_IIIload all move/mesh mesh plane_yz_pos linear ${vel_neg} 0.0 0.0  
+#fix move_plane_yz_neg_IIIload all move/mesh mesh plane_yz_neg linear ${vel} 0.0 0.0 
+#run ${stepsIIIload} upto
+#
+#unfix move_plane_yz_pos_IIIload
+#unfix move_plane_yz_neg_IIIload
+#fix move_plane_yz_pos_IIIunload all move/mesh mesh plane_yz_pos linear ${vel} 0.0 0.0  
+#fix move_plane_yz_neg_IIIunload all move/mesh mesh plane_yz_neg linear ${vel_neg} 0.0 0.0 
+#run ${stepsIIIunload} upto
+#
+#unfix move_plane_yz_pos_IIIunload
+#unfix move_plane_yz_neg_IIIunload
+#fix move_plane_yz_pos_IVload all move/mesh mesh plane_yz_pos linear ${vel_neg} 0.0 0.0  
+#fix move_plane_yz_neg_IVload all move/mesh mesh plane_yz_neg linear ${vel} 0.0 0.0 
+#run ${stepsIVload} upto
+#
+#unfix move_plane_yz_pos_IVload
+#unfix move_plane_yz_neg_IVload
+#fix move_plane_yz_pos_IVunload all move/mesh mesh plane_yz_pos linear ${vel} 0.0 0.0  
+#fix move_plane_yz_neg_IVunload all move/mesh mesh plane_yz_neg linear ${vel_neg} 0.0 0.0 
+#run ${stepsIVunload} upto
+

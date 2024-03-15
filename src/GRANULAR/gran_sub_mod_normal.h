@@ -19,6 +19,7 @@ GranSubModStyle(hertz,GranSubModNormalHertz,NORMAL);
 GranSubModStyle(hertz/material,GranSubModNormalHertzMaterial,NORMAL);
 GranSubModStyle(dmt,GranSubModNormalDMT,NORMAL);
 GranSubModStyle(jkr,GranSubModNormalJKR,NORMAL);
+GranSubModStyle(mdr,GranSubModNormalMDR,NORMAL);
 // clang-format on
 #else
 
@@ -130,6 +131,18 @@ namespace Granular_NS {
     double k, cohesion;
     double Emix, F_pulloff, Fne;
     int mixed_coefficients;
+  };
+
+  /* ---------------------------------------------------------------------- */
+
+  class GranSubModNormalMDR : public GranSubModNormal {
+   public:
+    GranSubModNormalMDR(class GranularModel *, class LAMMPS *);
+    void coeffs_to_local() override;
+    double calculate_forces() override;
+
+   protected:
+    double E, nu, Y, gamma, psi_b, CoR;
   };
 
 }    // namespace Granular_NS

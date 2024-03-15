@@ -199,6 +199,13 @@ void PairGranular::compute(int eflag, int vflag)
       model->xj = x[j];
       model->radi = radius[i];
       model->radj = radius[j];
+
+      // Added for MDR contact model
+      model->i = i;
+      model->j = j;
+      model->itype = itype;
+      model->jtype = jtype;
+      
       if (use_history) model->touch = touch[jj];
 
       touchflag = model->check_contact();

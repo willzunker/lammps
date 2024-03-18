@@ -442,10 +442,10 @@ double GranSubModNormalMDR::calculate_forces()
   const double radi_true = gm->radi;  // true i particle initial radius
   const double radj_true = gm->radj;  // true j particle initial radius
 
-  double F;                  // average force 
-  double F0;                 // force on contact side 0
-  double F1;                 // force on contact side 1
-  double delta = gm->delta;  // apparent overlap
+  double F;                           // average force 
+  double F0;                          // force on contact side 0
+  double F1;                          // force on contact side 1
+  double delta = gm->delta;           // apparent overlap
   if (gm->contact_type == PAIR) delta = gm->delta/2.0; // half displacement to imagine interaction with rigid flat 
   
   // initialize indexing in history array of different variables 
@@ -603,11 +603,74 @@ double GranSubModNormalMDR::calculate_forces()
     // force calculation
     double F_MDR;
 
-    if (gamma > 0.0) {
-      F_MDR = 0.0;
-    } else { 
+    
+    double a_na;
+    (deltae1D >= 0.0) ? a_na = B*sqrt(A - deltae1D)*sqrt(deltae1D)/A : a_na = 0.0;
+    double aAdh = *aAdh_offset; 
+    if ( gamma > 0.0  ) { // adhesive contact
+    double g_aAdh;
+    
+      if (delta_MDR == deltamax_MDR || a_na >= aAdh ) { // case 1: no tensile springs, purely compressive contact
+        (deltae1D <= 0.0) ? F_MDR = 0.0 : F_MDR = Eeff*(A*B/4.0)*(acos(1.0 - 2.0*deltae1D/A) - (1.0 - 2.0*deltae1D/A)*sqrt(4.0*deltae1D/A - 4.0*pow(deltae1D,2.0)/pow(A,2.0))); 
+        if ( std::isnan(F_MDR) ) std::cout << "F_MDR is NaN, case 1: no tensile springs" << std::endl;
+        *aAdh_offset = a_na;
+      } else {
+        const double lmax = sqrt(2.0*M_PI*aAdh*gamma/Eeff); 
+        g_aAdh = A/2 - A/B*sqrt(pow(B,2.0)/4 - pow(aAdh,2.0));
+        const double acrit = (-((pow(B,2)*gamma*M_PI)/(pow(A,2)*Eeff)) + (pow(2,0.3333333333333333)*pow(B,4)*pow(gamma,2)*pow(M_PI,1.6666666666666667))/
+                            (pow(A,2)*pow(Eeff,2)*pow((27*pow(A,4)*pow(B,4)*gamma)/Eeff - (2*pow(B,6)*pow(gamma,3)*pow(M_PI,2))/pow(Eeff,3) + (3*sqrt(3)*sqrt(27*pow(A,8)*pow(B,8)*pow(Eeff,2)*pow(gamma,2) -
+                              4*pow(A,4)*pow(B,10)*pow(gamma,4)*pow(M_PI,2)))/pow(Eeff,2),0.3333333333333333)) + (pow(M_PI/2.,0.3333333333333333)*pow((27*pow(A,4)*pow(B,4)*gamma)/Eeff -
+                            (2*pow(B,6)*pow(gamma,3)*pow(M_PI,2))/pow(Eeff,3) + (3*sqrt(3)*sqrt(27*pow(A,8)*pow(B,8)*pow(Eeff,2)*pow(gamma,2) - 4*pow(A,4)*pow(B,10)*pow(gamma,4)*pow(M_PI,2)))/
+                            pow(Eeff,2),0.3333333333333333))/pow(A,2))/6;
+
+        if ( deltae1D + lmax - g_aAdh >= 0) { // case 2: tensile springs, but not exceeding critical length --> deltae + lmax - g(aAdhes) >= 0
+          const double deltaeAdh = g_aAdh; 
+          const double F_na = Eeff*(A*B/4.0)*(acos(1.0 - 2.0*deltaeAdh/A) - (1.0 - 2.0*deltaeAdh/A)*sqrt(4.0*deltaeAdh/A - 4.0*pow(deltaeAdh,2.0)/pow(A,2.0)));
+          const double F_Adhes = 2.0*Eeff*(deltae1D - deltaeAdh)*aAdh;
+          F_MDR = F_na + F_Adhes; 
+          if ( std::isnan(F_MDR) ) std::cout << "F_MDR is NaN, case 2: tensile springs, but not exceeding critical length" << std::endl;
+
+        } else { // case 3: tensile springs exceed critical length --> deltae + lmax - g(aAdhes) = 0
+          // newton-raphson to find aAdh
+          const double maxIterations = 100;
+          const double error = 1e-16;
+          double aAdh_tmp = aAdh;
+          double fa; 
+          double fa2;
+          double dfda;
+          for (int lv1 = 0; lv1 < maxIterations; ++lv1) {
+            fa = deltae1D + sqrt(2.0*M_PI*aAdh_tmp*gamma/Eeff) - ( A/2 - A/B*sqrt(pow(B,2.0)/4 - pow(aAdh_tmp,2.0)) );
+            if (abs(fa) < error) {
+              break;
+            } 
+            dfda = -((aAdh_tmp*A)/(B*sqrt(-pow(aAdh_tmp,2.0) + pow(B,2.0)/4.0))) + (gamma*sqrt(M_PI/2.0))/(Eeff*sqrt((aAdh_tmp*gamma)/Eeff));
+            aAdh_tmp = aAdh_tmp - fa/dfda;
+            fa2 = deltae1D + sqrt(2.0*M_PI*aAdh_tmp*gamma/Eeff) - ( A/2 - A/B*sqrt(pow(B,2.0)/4 - pow(aAdh_tmp,2.0)) );
+            if (abs(fa-fa2) < error) {
+              break;
+            } 
+            if (lv1 == maxIterations-1){
+              aAdh_tmp = 0.0;
+            }
+          }
+          aAdh = aAdh_tmp;
+
+          if ( aAdh < acrit ) {
+            F_MDR = 0.0;
+          } else {
+            g_aAdh = A/2.0 - A/B*sqrt(pow(B,2.0)/4.0 - pow(aAdh,2.0));                  
+            const double deltaeAdh = g_aAdh; 
+            const double F_na = Eeff*(A*B/4.0)*(acos(1.0 - 2.0*deltaeAdh/A) - (1.0 - 2.0*deltaeAdh/A)*sqrt(4.0*deltaeAdh/A - 4.0*pow(deltaeAdh,2.0)/pow(A,2.0)));
+            const double F_Adhes = 2.0*Eeff*(deltae1D - deltaeAdh)*aAdh;
+            F_MDR = F_na + F_Adhes; 
+            if ( std::isnan(F_MDR) ) std::cout << "F_MDR is NaN, case 3: tensile springs exceed critical length" << std::endl;
+          }
+          *aAdh_offset = aAdh;
+        }
+      }
+    } else { // non-adhesive contact
       (deltae1D <= 0.0) ? F_MDR = 0.0 : F_MDR = Eeff*(A*B/4.0)*(acos(1.0 - 2.0*deltae1D/A) - (1.0 - 2.0*deltae1D/A)*sqrt(4.0*deltae1D/A - 4.0*pow(deltae1D,2.0)/pow(A,2.0))); 
-        if ( std::isnan(F_MDR) ) std::cout << "F_MDR is NaN Flag 2" << std::endl;
+      if ( std::isnan(F_MDR) ) std::cout << "F_MDR is NaN, non-adhesive case" << std::endl;
     }
     
     const double F_BULK = 0.0;

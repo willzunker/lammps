@@ -18,21 +18,25 @@ create_box 2 simBox
 ########################### PARTICLE MATERIAL PROPERTIES AND FORCE MODEL ###############################
 
 pair_style granular
-pair_coeff * * hertz 1000.0 0.0 tangential linear_nohistory 0.0 0.0
+# E, nu, Y, gamma, psi_b, CoR
+pair_coeff * * mdr 5e8 0.3 25e6 0.0 0.08 1.0 tangential linear_nohistory 0.0 0.0
 
 ######################################### ADD IN PLANES ################################################
 
+variable  dx0 equal -0.001
+variable  dx1 equal 0.001
+
+region plane_yz_pos plane 1 0 0 -1 0 0 side in move v_dx0 NULL NULL units box
+region plane_yz_neg plane -1 0 0 1 0 0 side in move v_dx1 NULL NULL units box
+
+variable wall_contact_string string "granular mdr 5e8 0.3 25e6 0.0 0.08 1.0 tangential linear_nohistory 0.0 0.0"
+
+#variable wall_contact_string string "granular hooke 1 0 tangential linear_history 1 0 0 damping velocity"
+
 group plane_yz_pos type 1
 group plane_yz_neg type 1
-fix plane_yz_pos plane_yz_pos wall/gran granular hertz 1000.0 0.0 tangential linear_nohistory 0.0 0.0 xplane 10 NULL 
-fix plane_yz_neg plane_yz_neg wall/gran granular hertz 1000.0 0.0 tangential linear_nohistory 0.0 0.0 xplane -10 NULL
-
-#fix plane_yz_pos all smd/wall_surface meshes/plane_yz_pos.stl 1 543210
-#run 0
-#fix plane_yz_neg all smd/wall_surface meshes/plane_yz_neg.stl 1 545210
-#run 0
-#pair_style smd/tri_surface 1.0
-#pair_coeff 1 1 hertz 1000.0  
+fix plane_yz_pos plane_yz_pos wall/gran/region ${wall_contact_string} region plane_yz_pos contacts
+fix plane_yz_neg plane_yz_neg wall/gran/region ${wall_contact_string} region plane_yz_neg contacts
 
 ##################################### INSERT PARTICLES ####################################################
 
@@ -82,13 +86,19 @@ fix cAtom centerAtom move variable v_zeroDisp NULL NULL NULL NULL NULL units box
 ##################################### SET UP DUMP OUTPUTS  ####################################################
 
 dump dumpParticles all vtk 1 post/particles_*.vtk x y z fx fy fz 
-dump dumpWalls 
-#dump dumpSTL all mesh/stl 10 post/walls_*.stl
+
+#variable x_yz_neg equal f_plane_yz_neg[1][5]
+#variable fx_yz_neg equal f_plane_yz_neg[1][2]
+#variable del equal ${d}/2.0+v_x_yz_neg
+
+#dump 1 all custom 1 uniaxialCompression id type f_plane_yz_neg[1][2][1]
+
+#fix log all print 1 "${del},${fx_yz_neg}" file uniaxialCompression.csv title "del,fx_yz_neg" screen no
 
 ######################################### BEGIN RUN  ##########################################################
 
-fix move_plane_yz_pos_Iload plane_yz_pos move linear ${vel_neg} 0.0 0.0  
-fix move_plane_yz_neg_Iload plane_yz_neg move linear ${vel} 0.0 0.0 
+#fix move_plane_yz_pos_Iload plane_yz_pos move linear ${vel_neg} 0.0 0.0  
+#fix move_plane_yz_neg_Iload plane_yz_neg move linear ${vel} 0.0 0.0 
 run ${stepsIload} upto
 
 #unfix move_plane_yz_pos_Iload

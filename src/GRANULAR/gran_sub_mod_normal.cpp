@@ -112,6 +112,7 @@ void GranSubModNormalHooke::coeffs_to_local()
 
 double GranSubModNormalHooke::calculate_forces()
 {
+  std::cout << "F Hooke is: " << k * gm->delta << std::endl;
   return k * gm->delta;
 }
 
@@ -396,6 +397,8 @@ GranSubModNormalMDR::GranSubModNormalMDR(GranularModel *gm, LAMMPS *lmp) :
   nondefault_history_transfer = 1;
   transfer_history_factor = new double[size_history];
   transfer_history_factor[0] = +1;
+
+  std::cout << "MDR contact model has been initialized." << std::endl;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -436,6 +439,8 @@ double GranSubModNormalMDR::calculate_forces()
   //  
   // Zunker and Kamrin, 2024, Part I: https://doi.org/10.1016/j.jmps.2023.105492
   // Zunker and Kamrin, 2024, Part II: https://doi.org/10.1016/j.jmps.2023.105493
+
+  std::cout << "MDR contact model has been entered." << std::endl;
 
   const int i_true = gm->i;           // true i particle index
   const int j_true = gm->j;           // true j particle index
@@ -677,6 +682,7 @@ double GranSubModNormalMDR::calculate_forces()
     (contactSide == 0) ? F0 = F_MDR + F_BULK : F1 = F_MDR + F_BULK;
   }
   F = (F0 + F1)/2;
+  std::cout << "F is: " << F << std::endl;
   return F;
 }
 

@@ -59,6 +59,10 @@ class PairGranular : public Pair {
   class FixDummy *fix_dummy;
   class FixNeighHistory *fix_history;
 
+  int fix_flag;
+  int index_Ro;
+  int index_Rold;
+
   // storage of rigid body masses for use in granular interactions
 
   class Fix *fix_rigid;    // ptr to rigid body fix, null pointer if none

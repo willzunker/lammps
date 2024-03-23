@@ -429,6 +429,8 @@ FixAveChunk::~FixAveChunk()
 
 /* ---------------------------------------------------------------------- */
 
+// FOR MDR
+
 int FixAveChunk::setmask()
 {
   int mask = 0;
@@ -496,6 +498,8 @@ void FixAveChunk::setup(int /*vflag*/)
 }
 
 /* ---------------------------------------------------------------------- */
+
+// FOR MDR, DO WHATEVER YOUR FIX NEEDS TO DO.
 
 void FixAveChunk::end_of_step()
 {

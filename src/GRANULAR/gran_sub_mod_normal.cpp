@@ -15,6 +15,7 @@
 #include "error.h"
 #include "granular_model.h"
 #include "math_const.h"
+#include "atom.h"
 
 #include <cmath>
 #include <iostream>
@@ -681,17 +682,17 @@ double GranSubModNormalMDR::calculate_forces()
     const double F_BULK = 0.0;
     (contactSide == 0) ? F0 = F_MDR + F_BULK : F1 = F_MDR + F_BULK;
   }
+
+  // call in particle history variable
+  int tmp1, tmp2;
+  int index_Ro = atom->find_custom("Ro",tmp1,tmp2);
+  double * Ro = atom->dvector[index_Ro];
+  std::cout << "Ro from particle history is: " << Ro[gm->i] << std::endl;
+
   F = (F0 + F1)/2;
   std::cout << "F is: " << F << std::endl;
   return F;
 }
-
-
-
-
-
-
-
 
 
 

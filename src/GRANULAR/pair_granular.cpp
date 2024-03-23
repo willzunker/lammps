@@ -199,13 +199,9 @@ void PairGranular::compute(int eflag, int vflag)
       model->xj = x[j];
       model->radi = radius[i];
       model->radj = radius[j];
-
-      // Added for MDR contact model
       model->i = i;
       model->j = j;
-      model->itype = itype;
-      model->jtype = jtype;
-      
+
       if (use_history) model->touch = touch[jj];
 
       touchflag = model->check_contact();
@@ -474,6 +470,44 @@ void PairGranular::init_style()
     fix_history = dynamic_cast<FixNeighHistory *>(modify->get_fix_by_id("NEIGH_HISTORY_GRANULAR"));
     if (!fix_history) error->all(FLERR,"Could not find pair fix neigh history ID");
   }
+
+  /*
+  // Example
+  //Store persistent per atom quantities
+  if (! fix_flag) {
+    int tmp1, tmp2;
+    id_fix = "BOND_BPM_PLASTIC_FIX_PROP_ATOM";
+      modify->add_fix(
+        fmt::format("{} all property/atom d_plastic d_plastic_temp d_viscous_temp d_plastic_heat d_viscous_heat ghost yes", id_fix));
+    index_plastic = atom->find_custom("plastic",tmp1,tmp2);
+    index_pq = atom->find_custom("plastic_heat",tmp1,tmp2);
+    index_pt = atom->find_custom("plastic_temp",tmp1,tmp2);
+    index_vq = atom->find_custom("viscous_heat",tmp1,tmp2);
+    index_vt = atom->find_custom("viscous_temp",tmp1,tmp2);
+    fix_flag = 1;
+  } 
+  */
+
+  // FOR MDR CONTACT MODEL
+  //Store persistent per atom quantities
+  if (! fix_flag) {
+    int tmp1, tmp2;
+    const char * id_fix = "MDR_PARTICLE_HISTORY_VARIABLES";
+      modify->add_fix(
+        fmt::format("{} all property/atom d_Ro d_Rold ghost yes", id_fix));
+        // d2_volSums 4 --> allows an array of 4 to defined.
+    index_Ro = atom->find_custom("Ro",tmp1,tmp2);
+    index_Rold = atom->find_custom("Rold",tmp1,tmp2);
+
+    //index_volSums = atom->find_custom("volSums",tmp1,tmp2);
+
+    // Initiate MDR radius update fix
+    modify->add_fix("fix_mdr_radius_update all mdr/radius/update");
+    
+    fix_flag = 1;
+  } 
+
+  // double * Ro = atom->dvector[index_Ro] gives double pointer 
 
   // check for FixFreeze and set freeze_group_bit
 

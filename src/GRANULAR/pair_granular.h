@@ -59,9 +59,15 @@ class PairGranular : public Pair {
   class FixDummy *fix_dummy;
   class FixNeighHistory *fix_history;
 
+  // MDR particle history variables
   int fix_flag;
   int index_Ro;
-  int index_Rold;
+  int index_Vcaps;
+  int index_Vgeo;
+  int index_Velas;  
+  int index_eps_bar;
+  int index_dRnumerator;
+  int index_dRdenominator;
 
   // storage of rigid body masses for use in granular interactions
 

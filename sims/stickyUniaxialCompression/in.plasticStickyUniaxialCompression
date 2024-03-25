@@ -19,7 +19,7 @@ create_box 2 simBox
 
 pair_style granular
 # E, nu, Y, gamma, psi_b, CoR
-pair_coeff * * mdr 1e6 0.3 8e4 50 0.08 1.0 tangential linear_nohistory 0.0 0.0
+pair_coeff * * mdr 1e6 0.3 8e4 1000 0.08 1.0 tangential linear_nohistory 0.0 0.0
 
 ##################################### INSERT PARTICLES ####################################################
 
@@ -41,10 +41,10 @@ thermo_modify lost ignore norm no
 variable mydt equal dt
 variable mystep equal step
 variable mytime equal ${mydt}*v_mystep
-variable freq equal 1.0/(20.0*${mydt})
-variable dispMax equal 0.01 #${d}/4
-variable disp equal ${dispMax}*sin(${freq}*v_mytime)
-variable disp_neg equal -v_disp
+variable freq equal 1.0/(100.0*${mydt})
+variable dispMax equal 0.2
+variable disp equal ${dispMax}*abs(sin(${freq}*v_mytime))
+variable disp_nge equal -v_disp
 variable vel equal ${dispMax}*${freq}*cos(${freq}*v_mytime)
 variable vel_neg equal -v_vel
 variable zeroDisp equal 0.0
@@ -57,7 +57,7 @@ fix cAtom centerAtom move variable v_zeroDisp NULL NULL NULL NULL NULL units box
 region plane_yz_pos plane 1 0 0 -1 0 0 side in move v_disp_neg NULL NULL units box
 region plane_yz_neg plane -1 0 0 1 0 0 side in move v_disp NULL NULL units box
 
-variable wall_contact_string string "granular mdr 1e6 0.3 8e4 50 0.08 1.0 tangential linear_nohistory 0.0 0.0"
+variable wall_contact_string string "granular mdr 1e6 0.3 8e4 1000 0.08 1.0 tangential linear_nohistory 0.0 0.0"
 
 fix plane_yz_pos all wall/gran/region ${wall_contact_string} region plane_yz_pos contacts
 fix plane_yz_neg all wall/gran/region ${wall_contact_string} region plane_yz_neg contacts
@@ -72,8 +72,8 @@ variable afx_yz_neg atom f_plane_yz_neg[2]
 variable xpos equal v_ax_yz_neg[1]
 variable delta equal ${d}/2+v_xpos
 variable fx_neg equal v_afx_yz_neg[1]
-fix log all print 1 "${delta} ${fx_neg}" file stickyUniaxialCompression.csv title "del,fx_yz_neg" screen no
+fix log all print 1 "${delta} ${fx_neg}" file plasticStickyUniaxialCompression.csv title "del,fx_yz_neg" screen no
 
 ######################################### BEGIN RUN  ##########################################################
 
-run 100 upto
+run 800 upto

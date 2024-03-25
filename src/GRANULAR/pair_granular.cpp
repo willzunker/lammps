@@ -493,11 +493,15 @@ void PairGranular::init_style()
   if (! fix_flag) {
     int tmp1, tmp2;
     const char * id_fix = "MDR_PARTICLE_HISTORY_VARIABLES";
-      modify->add_fix(
-        fmt::format("{} all property/atom d_Ro d_Rold ghost yes", id_fix));
-        // d2_volSums 4 --> allows an array of 4 to defined.
-    index_Ro = atom->find_custom("Ro",tmp1,tmp2);
-    index_Rold = atom->find_custom("Rold",tmp1,tmp2);
+    modify->add_fix(fmt::format("{} all property/atom d_Ro d_Vcaps d_Vgeo d_Velas d_eps_bar d_dRnumerator d_dRdenominator ghost yes", id_fix));
+    // d2_volSums 4 --> allows an array of 4 to defined.
+    index_Ro = atom->find_custom("Ro",tmp1,tmp2);                       // initial radius
+    index_Vcaps = atom->find_custom("Vcaps",tmp1,tmp2);                 // spherical cap volume from intersection of apparent radius particle and contact planes
+    index_Vgeo = atom->find_custom("Vgeo",tmp1,tmp2);                   // geometric particle volume of apparent particle after removing spherical cap volume
+    index_Velas = atom->find_custom("Velas",tmp1,tmp2);                 // particle volume from linear elasticity  
+    index_eps_bar = atom->find_custom("eps_bar",tmp1,tmp2);             // volume-averaged infinitesimal strain tensor
+    index_dRnumerator = atom->find_custom("dRnumerator",tmp1,tmp2);     // summation of numerator terms in calculation of dR
+    index_dRdenominator = atom->find_custom("dRdenominator",tmp1,tmp2); // summation of denominator terms in calculation of dR
 
     //index_volSums = atom->find_custom("volSums",tmp1,tmp2);
 
@@ -505,9 +509,7 @@ void PairGranular::init_style()
     modify->add_fix("fix_mdr_radius_update all mdr/radius/update");
     
     fix_flag = 1;
-  } 
-
-  // double * Ro = atom->dvector[index_Ro] gives double pointer 
+  }  
 
   // check for FixFreeze and set freeze_group_bit
 

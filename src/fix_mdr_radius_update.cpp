@@ -45,37 +45,70 @@ int FixMDRradiusUpdate::setmask()
 
 void FixMDRradiusUpdate::setup(int /*vflag*/)
 {
-  
+  // assign correct value to initially non-zero MDR particle history variables 
   int tmp1, tmp2;
   int index_Ro = atom->find_custom("Ro",tmp1,tmp2);
-  int index_Rold = atom->find_custom("Rold",tmp1,tmp2);
+  int index_Vgeo = atom->find_custom("Vgeo",tmp1,tmp2);
+  int index_Velas = atom->find_custom("Velas",tmp1,tmp2);
   double * Ro = atom->dvector[index_Ro];
-  double * Rold = atom->dvector[index_Rold];
+  double * Vgeo = atom->dvector[index_Vgeo];
+  double * Velas = atom->dvector[index_Velas];
 
   double *radius = atom->radius;
   int nlocal = atom->nlocal;
   for (int i = 0; i < nlocal; i++) {
     Ro[i] = radius[i];
-    Rold[i] = radius[i];
+    Vgeo[i] = 4.0/3.0*M_PI*pow(Ro[i],3.0);
+    Velas[i] = 4.0/3.0*M_PI*pow(Ro[i],3.0);
   }
-
-  std::cout << "Fix radius update setup has been entered !!!" << std::endl;
-  std::cout << Ro[0] << ", " << Rold[0] << std::endl;
-
   end_of_step();
 }
 
 /* ---------------------------------------------------------------------- */
 
-// FOR MDR, DO WHATEVER YOUR FIX NEEDS TO DO.
-
 void FixMDRradiusUpdate::end_of_step()
 {
-  double dR = 0.1;
+  // update the apparent radius of every particle
+
+  int tmp1, tmp2;
+  int index_Ro = atom->find_custom("Ro",tmp1,tmp2);
+  int index_Vgeo = atom->find_custom("Vgeo",tmp1,tmp2);
+  int index_Velas = atom->find_custom("Velas",tmp1,tmp2);
+  int index_Vcaps = atom->find_custom("Vcaps",tmp1,tmp2);
+  int index_eps_bar = atom->find_custom("eps_bar",tmp1,tmp2);
+  int index_dRnumerator = atom->find_custom("dRnumerator",tmp1,tmp2);
+  int index_dRdenominator = atom->find_custom("dRdenominator",tmp1,tmp2);
+  double * Ro = atom->dvector[index_Ro];
+  double * Vgeo = atom->dvector[index_Vgeo];
+  double * Velas = atom->dvector[index_Velas];
+  double * Vcaps = atom->dvector[index_Vcaps];
+  double * eps_bar = atom->dvector[index_eps_bar];
+  double * dRnumerator = atom->dvector[index_dRnumerator];
+  double * dRdenominator = atom->dvector[index_dRdenominator];
+
   double *radius = atom->radius;
   int nlocal = atom->nlocal;
   for (int i = 0; i < nlocal; i++) {
-    radius[i] += dR;
+    const double R = radius[i];
+    const double Vo = 4.0/3.0*M_PI*pow(Ro[i],3.0);
+    (Vgeo[i] < Vo) ? Vgeo[i] = 4.0/3.0*M_PI*pow(R,3.0) - Vcaps[i] : Vgeo[i] = Vo;
+
+    const double dR = std::max(dRnumerator[i]/(dRdenominator[i] - 4.0*M_PI*pow(R,2.0)),0.0);
+    const double psi = 1.0;
+    const double psi_b = 0.08;
+    if (psi_b < psi) { 
+      radius[i] += dR;
+      
+    }
+
+    Velas[i] = Vo*(1.0 + eps_bar[i]);
+    Vcaps[i] = 0.0;
+    eps_bar[i] = 0.0;
+    dRnumerator[i] = 0.0;
+    dRdenominator[i] = 0.0;
   }
 }
 
+//std::cout << radius[i] << ", " << dR << ", " << dRnumerator[i] << ", " << dRdenominator[i] << ", " << dRdenominator[i] - 4.0*M_PI*pow(R,2.0)  << std::endl;
+//std::cout << "Fix radius update setup has been entered !!!" << std::endl;
+//std::cout << Ro[0] << ", " << Vgeo[0] << ", " << Velas[0] << std::endl;

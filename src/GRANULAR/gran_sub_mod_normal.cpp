@@ -441,8 +441,6 @@ double GranSubModNormalMDR::calculate_forces()
   // Zunker and Kamrin, 2024, Part I: https://doi.org/10.1016/j.jmps.2023.105492
   // Zunker and Kamrin, 2024, Part II: https://doi.org/10.1016/j.jmps.2023.105493
 
-  std::cout << "MDR contact model has been entered." << std::endl;
-
   const int i_true = gm->i;           // true i particle index
   const int j_true = gm->j;           // true j particle index
   const double radi_true = gm->radi;  // true i particle initial radius
@@ -454,7 +452,7 @@ double GranSubModNormalMDR::calculate_forces()
   double delta = gm->delta;           // apparent overlap
   if (gm->contact_type == PAIR) delta = gm->delta/2.0; // half displacement to imagine interaction with rigid flat 
   
-  // initialize indexing in history array of different variables 
+  // initialize indexing in history array of different constact history variables 
   const int delta_offset_0 = 0;           // apparent overlap 
   const int delta_offset_1 = 1;           
   const int deltao_offset_0 = 2;          // displacement 
@@ -477,6 +475,23 @@ double GranSubModNormalMDR::calculate_forces()
   const int Ac_offset_1 = 19;
   const int eps_bar_offset_0 = 20;        // volume-averaged infinitesimal strain tensor
   const int eps_bar_offset_1 = 21;
+
+  // initialize particle history variables 
+  int tmp1, tmp2;
+  int index_Ro = atom->find_custom("Ro",tmp1,tmp2);                       // initial radius
+  int index_Vcaps = atom->find_custom("Vcaps",tmp1,tmp2);                 // spherical cap volume from intersection of apparent radius particle and contact planes
+  int index_Vgeo = atom->find_custom("Vgeo",tmp1,tmp2);                   // geometric particle volume of apparent particle after removing spherical cap volume
+  int index_Velas = atom->find_custom("Velas",tmp1,tmp2);                 // particle volume from linear elasticity  
+  int index_eps_bar = atom->find_custom("eps_bar",tmp1,tmp2);             // volume-averaged infinitesimal strain tensor
+  int index_dRnumerator = atom->find_custom("dRnumerator",tmp1,tmp2);     // summation of numerator terms in calculation of dR
+  int index_dRdenominator = atom->find_custom("dRdenominator",tmp1,tmp2); // summation of denominator terms in calculation of dR
+  double * Rinitial = atom->dvector[index_Ro];
+  double * Vgeo = atom->dvector[index_Vgeo];
+  double * Velas = atom->dvector[index_Velas];
+  double * Vcaps = atom->dvector[index_Vcaps];
+  double * eps_bar = atom->dvector[index_eps_bar];
+  double * dRnumerator = atom->dvector[index_dRnumerator];
+  double * dRdenominator = atom->dvector[index_dRdenominator];
 
   for (int contactSide = 0; contactSide < 2; contactSide++) { 
 
@@ -530,17 +545,19 @@ double GranSubModNormalMDR::calculate_forces()
       eps_bar_offset = & history[eps_bar_offset_1];
     }
 
+    // temporary i and j indices
+    const int i = gm->i;
+    const int j = gm->j;
+
     // material and geometric property definitions
     // E, nu, Y gamma , psi_b, and CoR are already defined.
     const double G = E/(2.0*(1.0+nu));          // shear modulus
     const double kappa = E/(3.0*(1.0-2.0*nu));  // bulk modulus
     const double Eeff = E/(1.0-pow(nu,2.0));    // composite plane strain modulus
 
-    const double Ro = gm->radi;                 // initial radius
-    const double R = Ro;                        // apparent radius UPDATE ONCE WE HAVE PARTICLE HISTORY VARIABLES
-    //double * const radc_i = radc[sidata.i];
-    //double R = radc_i[0];  // current radiu
-
+    const double Ro = Rinitial[i];                    // initial radius
+    const double R = gm->radi;                  // apparent radius UPDATE ONCE WE HAVE PARTICLE HISTORY VARIABLES
+ 
     // kinematics UPDATE ONCE WE HAVE PARTICLE HISTORY VARIABLES
     const double ddelta = delta - *delta_offset;
     *delta_offset = delta;
@@ -548,8 +565,6 @@ double GranSubModNormalMDR::calculate_forces()
     const double deltao = delta - (R - Ro);
     const double ddeltao = deltao - *deltao_offset;
     *deltao_offset = deltao;
-
-    // add in particle volume and deformed particle volume initializations ONCE WE HAVE PARTICLE HISTORY VARIABLES
 
     double Acon = 0.0;
     double Atot = 1.0;
@@ -608,8 +623,6 @@ double GranSubModNormalMDR::calculate_forces()
     
     // force calculation
     double F_MDR;
-
-    
     double a_na;
     (deltae1D >= 0.0) ? a_na = B*sqrt(A - deltae1D)*sqrt(deltae1D)/A : a_na = 0.0;
     double aAdh = *aAdh_offset; 
@@ -681,24 +694,44 @@ double GranSubModNormalMDR::calculate_forces()
     
     const double F_BULK = 0.0;
     (contactSide == 0) ? F0 = F_MDR + F_BULK : F1 = F_MDR + F_BULK;
+
+    // radius update scheme quantity calculation
+    Vcaps[i] += (M_PI/3.0)*pow(delta,2.0)*(3.0*R - delta);
+    //double * const pij = &sidata.contact_history[penalty_offset_];
+    //const double wij = std::max(1.0-pij[0],0.0);
+    const double wij = 1.0;
+    const double Fntmp = wij*(F_MDR + F_BULK);
+    const double fx = Fntmp*gm->nx[0];
+    const double fy = Fntmp*gm->nx[1];
+    const double fz = Fntmp*gm->nx[2];
+
+    const double bx = -(Ro - deltao)*gm->nx[0];
+    const double by = -(Ro - deltao)*gm->nx[1];
+    const double bz = -(Ro - deltao)*gm->nx[2];
+    const double eps_bar_contact = (1.0/(3*kappa*Velas[i]))*(fx*bx + fy*by + fz*bz);
+    eps_bar[i] += eps_bar_contact;
+    
+    if(delta_MDR == deltamax_MDR && *Yflag_offset > 0.0 && F_MDR > 0.0){
+      const double Vo = (4.0/3.0)*M_PI*pow(Ro,3.0);
+      dRnumerator[i] += -Vo*(eps_bar_contact - *eps_bar_offset) - wij*M_PI*ddeltao*( 2.0*deltao*Ro - pow(deltao,2.0) + pow(R,2.0) - pow(Ro,2.0) );
+      dRdenominator[i] += wij*2.0*M_PI*R*(deltao + R - Ro);
+    }
+    *eps_bar_offset = eps_bar_contact;
+
   }
 
-  // call in particle history variable
-  int tmp1, tmp2;
-  int index_Ro = atom->find_custom("Ro",tmp1,tmp2);
-  double * Ro = atom->dvector[index_Ro];
-  std::cout << "Ro from particle history is: " << Ro[gm->i] << std::endl;
 
+  
   F = (F0 + F1)/2;
-  std::cout << "F is: " << F << std::endl;
+  
   return F;
 }
 
-
-
-
-
-
+//std::cout << sidata.i << ", " << sidata.j << ", " << R << ", " << deltan << ", " << deltao << ", " << dRsums_i[0] << ", " << dRsums_i[1] << ", " << numQuant << std::endl;
+//std::cout << gm->i << ", " << gm->j << " | " << gm->nx[0] << ", " << gm->nx[1] << ", " << gm->nx[2] << std::endl;
+//std::cout << "F is: " << F << std::endl;
+//std::cout << "Ro from particle history is: " << Ro[gm->i] << std::endl;
+//std::cout << "MDR contact model has been entered." << std::endl;
 // std::cout << "F is: " << F << std::endl;
 //std::cout << "gamma > 0.0: " << F_MDR << ", " << gm->i << ", " << gm->j << std::endl;
 //std::cout << "deltae1D <= 0.0: " << F_MDR << ", " << gm->i << ", " << gm->j << std::endl;

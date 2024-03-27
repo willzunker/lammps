@@ -68,6 +68,14 @@ class PairGranular : public Pair {
   int index_eps_bar;
   int index_dRnumerator;
   int index_dRdenominator;
+  int index_Acon0;
+  int index_Acon1;
+  int index_Atot;
+  int index_Atot_sum;
+  int index_ddelta_bar0;
+  int index_ddelta_bar1;
+  int index_psi;
+  int index_psi_b;
 
   // storage of rigid body masses for use in granular interactions
 

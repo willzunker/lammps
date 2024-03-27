@@ -386,6 +386,10 @@ void GranSubModNormalJKR::set_fncrit()
 
 /* ----------------------------------------------------------------------
    MDR contact model
+
+   Contributing authors:
+   William Zunker (MIT), Sachith Dunatunga (MIT),
+   Dan Bolintineanu (SNL), Joel Clemmer (SNL)
 ------------------------------------------------------------------------- */
 
 GranSubModNormalMDR::GranSubModNormalMDR(GranularModel *gm, LAMMPS *lmp) :
@@ -471,10 +475,10 @@ double GranSubModNormalMDR::calculate_forces()
   const int cA_offset_1 = 15;
   const int aAdh_offset_0 = 16;           // adhesive contact radius
   const int aAdh_offset_1 = 17;
-  const int Ac_offset_0 = 18;             // contact area
-  const int Ac_offset_1 = 19;
-  const int eps_bar_offset_0 = 20;        // volume-averaged infinitesimal strain tensor
-  const int eps_bar_offset_1 = 21;
+  const int eps_bar_offset_0 = 18;        // volume-averaged infinitesimal strain tensor
+  const int eps_bar_offset_1 = 19;
+  //const int Ac_offset_0 = 18;             // contact area
+  //const int Ac_offset_1 = 19;
 
   // initialize particle history variables 
   int tmp1, tmp2;
@@ -485,6 +489,13 @@ double GranSubModNormalMDR::calculate_forces()
   int index_eps_bar = atom->find_custom("eps_bar",tmp1,tmp2);             // volume-averaged infinitesimal strain tensor
   int index_dRnumerator = atom->find_custom("dRnumerator",tmp1,tmp2);     // summation of numerator terms in calculation of dR
   int index_dRdenominator = atom->find_custom("dRdenominator",tmp1,tmp2); // summation of denominator terms in calculation of dR
+  int index_Acon0 = atom->find_custom("Acon0",tmp1,tmp2);                 // total area involved in contacts: Acon^{n} 
+  int index_Acon1 = atom->find_custom("Acon1",tmp1,tmp2);                 // total area involved in contacts: Acon^{n+1}
+  int index_Atot = atom->find_custom("Atot",tmp1,tmp2);                   // total particle area 
+  int index_Atot_sum = atom->find_custom("Atot_sum",tmp1,tmp2);           // running sum of contact area minus cap area
+  int index_ddelta_bar0 = atom->find_custom("ddelta_bar0",tmp1,tmp2);     // change in mean surface displacement: ddelta_bar^{n} 
+  int index_ddelta_bar1 = atom->find_custom("ddelta_bar1",tmp1,tmp2);     // change in mean surface displacement: ddelta_bar^{n+1}
+  int index_psi = atom->find_custom("psi",tmp1,tmp2);                     // ratio of free surface area to total surface area
   double * Rinitial = atom->dvector[index_Ro];
   double * Vgeo = atom->dvector[index_Vgeo];
   double * Velas = atom->dvector[index_Velas];
@@ -492,6 +503,13 @@ double GranSubModNormalMDR::calculate_forces()
   double * eps_bar = atom->dvector[index_eps_bar];
   double * dRnumerator = atom->dvector[index_dRnumerator];
   double * dRdenominator = atom->dvector[index_dRdenominator];
+  double * Acon0 = atom->dvector[index_Acon0];
+  double * Acon1 = atom->dvector[index_Acon1]; 
+  double * Atot = atom->dvector[index_Atot];
+  double * Atot_sum = atom->dvector[index_Atot_sum];
+  double * ddelta_bar0 = atom->dvector[index_ddelta_bar0];
+  double * ddelta_bar1 = atom->dvector[index_ddelta_bar1];
+  double * psi = atom->dvector[index_psi];
 
   for (int contactSide = 0; contactSide < 2; contactSide++) { 
 
@@ -505,7 +523,7 @@ double GranSubModNormalMDR::calculate_forces()
     double * deltaY_offset; 
     double * cA_offset;
     double * aAdh_offset; 
-    double * Ac_offset; 
+    //double * Ac_offset; 
     double * eps_bar_offset; 
      
     if (contactSide == 0) {
@@ -524,7 +542,7 @@ double GranSubModNormalMDR::calculate_forces()
       deltaY_offset = & history[deltaY_offset_0];
       cA_offset = & history[cA_offset_0];
       aAdh_offset = & history[aAdh_offset_0];
-      Ac_offset = & history[Ac_offset_0];
+      // Ac_offset = & history[Ac_offset_0];
       eps_bar_offset = & history[eps_bar_offset_0];
     } else {
       if (gm->contact_type != PAIR) break; // contact with particle-wall requires only one evaluation
@@ -541,7 +559,7 @@ double GranSubModNormalMDR::calculate_forces()
       deltaY_offset = & history[deltaY_offset_1];
       cA_offset = & history[cA_offset_1];
       aAdh_offset = & history[aAdh_offset_1];
-      Ac_offset = & history[Ac_offset_1];
+      //Ac_offset = & history[Ac_offset_1];
       eps_bar_offset = & history[eps_bar_offset_1];
     }
 
@@ -566,24 +584,19 @@ double GranSubModNormalMDR::calculate_forces()
     const double ddeltao = deltao - *deltao_offset;
     *deltao_offset = deltao;
 
-    double Acon = 0.0;
-    double Atot = 1.0;
-    double Afree = Atot - Acon;
-    double psi = Afree/Atot;
-    double ddelta_bar = 0.0;
     double ddelta_MDR;
     double ddelta_BULK;
-    if ( psi < psi_b ) { // if true, bulk response has triggered, split displacement increment between the MDR and BULK components 
-      ddelta_MDR = std::min(ddelta-ddelta_bar, delta-*delta_MDR_offset);
-      ddelta_BULK = ddelta_bar;
+    if ( psi[i] < psi_b ) { // if true, bulk response has triggered, split displacement increment between the MDR and BULK components 
+      ddelta_MDR = std::min(ddelta-ddelta_bar0[i], delta-*delta_MDR_offset);
+      ddelta_BULK = ddelta_bar0[i];
     } else { // if false, no bulk response, full displacement increment goes to the MDR component
       ddelta_BULK = 0.0;
       ddelta_MDR = ddelta;
     }
     const double delta_MDR = *delta_MDR_offset + ddelta_MDR; // MDR displacement
     *delta_MDR_offset = delta_MDR; // Update old MDR displacement
-    const double delta_BULK = std::max(0.0,*delta_BULK_offset+ddelta_BULK);
-    *delta_BULK_offset = delta_BULK;
+    const double delta_BULK = std::max(0.0,*delta_BULK_offset+ddelta_BULK); // bulk displacement
+    *delta_BULK_offset = delta_BULK; // update old bulk displacement
 
     if (delta > *deltamax_MDR_offset) *deltamax_MDR_offset = delta;
     const double deltamax_MDR = *deltamax_MDR_offset;
@@ -598,6 +611,8 @@ double GranSubModNormalMDR::calculate_forces()
       }
     } 
 
+    // MDR force calculation
+    double F_MDR;
     double A;                     // height of elliptical indenter
     double B;                     // width of elliptical indenter
     double deltae1D;              // transformed elastic displacement
@@ -621,8 +636,6 @@ double GranSubModNormalMDR::calculate_forces()
       deltae1D = (delta_MDR - deltamax_MDR + deltae1Dmax + deltaR)/(1 + deltaR/deltae1Dmax);  // transformed elastic displacement 
     }
     
-    // force calculation
-    double F_MDR;
     double a_na;
     (deltae1D >= 0.0) ? a_na = B*sqrt(A - deltae1D)*sqrt(deltae1D)/A : a_na = 0.0;
     double aAdh = *aAdh_offset; 
@@ -692,19 +705,35 @@ double GranSubModNormalMDR::calculate_forces()
       if ( std::isnan(F_MDR) ) std::cout << "F_MDR is NaN, non-adhesive case" << std::endl;
     }
     
-    const double F_BULK = 0.0;
+    // area related calculations 
+    double Ac; 
+    (*Yflag_offset == 0.0) ? Ac = M_PI*delta*R : Ac = M_PI*((2.0*delta*R - pow(delta,2.0)) + cA/M_PI);
+    if (Ac < 0.0 ) Ac = 0.0;
+    Atot_sum[i] += Ac - 2.0*M_PI*R*(deltamax_MDR + delta_BULK);
+    Acon1[i] += Ac;
+
+    // bulk force calculation
+    double F_BULK;
+    (delta_BULK <= 0.0) ? F_BULK = 0.0 : (1.0/Vgeo[i])*Acon0[i]*delta_BULK*kappa*Ac;
+
+    // total force calculation
     (contactSide == 0) ? F0 = F_MDR + F_BULK : F1 = F_MDR + F_BULK;
 
-    // radius update scheme quantity calculation
-    Vcaps[i] += (M_PI/3.0)*pow(delta,2.0)*(3.0*R - delta);
+    // contact penalty scheme
     //double * const pij = &sidata.contact_history[penalty_offset_];
     //const double wij = std::max(1.0-pij[0],0.0);
     const double wij = 1.0;
+
+    // mean surface dipslacement calculation
+     if (Acon0[i] > 0.0) ddelta_bar1[i] += wij*Ac/Acon0[i]*ddelta; 
+              
+    // radius update scheme quantity calculation
+    Vcaps[i] += (M_PI/3.0)*pow(delta,2.0)*(3.0*R - delta);
+    
     const double Fntmp = wij*(F_MDR + F_BULK);
     const double fx = Fntmp*gm->nx[0];
     const double fy = Fntmp*gm->nx[1];
     const double fz = Fntmp*gm->nx[2];
-
     const double bx = -(Ro - deltao)*gm->nx[0];
     const double by = -(Ro - deltao)*gm->nx[1];
     const double bz = -(Ro - deltao)*gm->nx[2];

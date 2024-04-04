@@ -493,7 +493,7 @@ void PairGranular::init_style()
   if (! fix_flag) {
     int tmp1, tmp2;
     const char * id_fix = "MDR_PARTICLE_HISTORY_VARIABLES";
-    modify->add_fix(fmt::format("{} all property/atom d_Ro d_Vcaps d_Vgeo d_Velas d_eps_bar d_dRnumerator d_dRdenominator d_Acon0 d_Acon1 d_Atot d_Atot_sum d_ddelta_bar d_psi d_psi_b ghost yes", id_fix));
+    modify->add_fix(fmt::format("{} all property/atom d_Ro d_Vcaps d_Vgeo d_Velas d_eps_bar d_dRnumerator d_dRdenominator d_Acon0 d_Acon1 d_Atot d_Atot_sum d_ddelta_bar d_psi d_psi_b d_ddelta_bar0 d_ddelta_bar1 ghost yes", id_fix));
     // d2_volSums 4 --> allows an array of 4 to defined.
     index_Ro = atom->find_custom("Ro",tmp1,tmp2);                       // initial radius
     index_Vcaps = atom->find_custom("Vcaps",tmp1,tmp2);                 // spherical cap volume from intersection of apparent radius particle and contact planes
@@ -507,6 +507,10 @@ void PairGranular::init_style()
     index_Atot = atom->find_custom("Atot",tmp1,tmp2);                   // total particle area 
     index_Atot_sum = atom->find_custom("Atot_sum",tmp1,tmp2);           // running sum of contact area minus cap area
     index_ddelta_bar = atom->find_custom("ddelta_bar",tmp1,tmp2);       // change in mean surface displacement
+
+    index_ddelta_bar0 = atom->find_custom("ddelta_bar0",tmp1,tmp2);
+    index_ddelta_bar1 = atom->find_custom("ddelta_bar1",tmp1,tmp2);
+
     index_psi = atom->find_custom("psi",tmp1,tmp2);                     // ratio of free surface area to total surface area
     index_psi_b = atom->find_custom("psi_b",tmp1,tmp2);                 // 
 
@@ -514,7 +518,7 @@ void PairGranular::init_style()
 
     // Initiate MDR radius update fix
     modify->add_fix("fix_mdr_radius_update all mdr/radius/update");
-    modify->add_fix("fix_mdr_mean_surf_disp all mdr/mean/surf/disp");
+    //modify->add_fix("fix_mdr_mean_surf_disp all mdr/mean/surf/disp");
     
     fix_flag = 1;
   }  

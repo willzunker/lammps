@@ -494,7 +494,11 @@ double GranSubModNormalMDR::calculate_forces()
   int index_Acon1 = atom->find_custom("Acon1",tmp1,tmp2);                 // total area involved in contacts: Acon^{n+1}
   int index_Atot = atom->find_custom("Atot",tmp1,tmp2);                   // total particle area 
   int index_Atot_sum = atom->find_custom("Atot_sum",tmp1,tmp2);           // running sum of contact area minus cap area
-  int index_ddelta_bar = atom->find_custom("ddelta_bar",tmp1,tmp2);     // change in mean surface displacement
+  int index_ddelta_bar = atom->find_custom("ddelta_bar",tmp1,tmp2);       // change in mean surface displacement
+
+  int index_ddelta_bar0 = atom->find_custom("ddelta_bar0",tmp1,tmp2);
+  int index_ddelta_bar1 = atom->find_custom("ddelta_bar1",tmp1,tmp2);
+
   int index_psi = atom->find_custom("psi",tmp1,tmp2);                     // ratio of free surface area to total surface area
   double * Rinitial = atom->dvector[index_Ro];
   double * Vgeo = atom->dvector[index_Vgeo];
@@ -508,6 +512,10 @@ double GranSubModNormalMDR::calculate_forces()
   double * Atot = atom->dvector[index_Atot];
   double * Atot_sum = atom->dvector[index_Atot_sum];
   double * ddelta_bar = atom->dvector[index_ddelta_bar];
+
+  double * ddelta_bar0 = atom->dvector[index_ddelta_bar0];
+  double * ddelta_bar1 = atom->dvector[index_ddelta_bar1];
+
   double * psi = atom->dvector[index_psi];
 
   for (int contactSide = 0; contactSide < 2; contactSide++) { 
@@ -586,8 +594,8 @@ double GranSubModNormalMDR::calculate_forces()
     double ddelta_MDR;
     double ddelta_BULK;
     if ( psi[i] < psi_b ) { // if true, bulk response has triggered, split displacement increment between the MDR and BULK components 
-      ddelta_MDR = std::min(ddelta-ddelta_bar[i], delta-*delta_MDR_offset);
-      ddelta_BULK = ddelta_bar[i];
+      ddelta_MDR = std::min(ddelta-ddelta_bar0[i], delta-*delta_MDR_offset);
+      ddelta_BULK = ddelta_bar0[i];
     } else { // if false, no bulk response, full displacement increment goes to the MDR component
       ddelta_BULK = 0.0;
       ddelta_MDR = ddelta;
@@ -730,6 +738,7 @@ double GranSubModNormalMDR::calculate_forces()
     const double wij = 1.0;
 
     // mean surface dipslacement calculation
+     if (Acon0[i] > 0.0) ddelta_bar1[i] += wij*Ac/Acon0[i]*ddelta;
      *Ac_offset = Ac;
 
     // radius update scheme quantity calculation

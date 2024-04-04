@@ -97,7 +97,11 @@ void FixMDRradiusUpdate::end_of_step()
   int index_Acon1 = atom->find_custom("Acon1",tmp1,tmp2);        
   int index_Atot = atom->find_custom("Atot",tmp1,tmp2);                   
   int index_Atot_sum = atom->find_custom("Atot_sum",tmp1,tmp2);   
-  int index_ddelta_bar = atom->find_custom("ddelta_bar",tmp1,tmp2);       
+  int index_ddelta_bar = atom->find_custom("ddelta_bar",tmp1,tmp2);     
+
+  int index_ddelta_bar0 = atom->find_custom("ddelta_bar0",tmp1,tmp2); 
+  int index_ddelta_bar1 = atom->find_custom("ddelta_bar1",tmp1,tmp2); 
+
   int index_psi = atom->find_custom("psi",tmp1,tmp2);
   int index_psi_b = atom->find_custom("psi_b",tmp1,tmp2); 
   double * Ro = atom->dvector[index_Ro];
@@ -112,6 +116,10 @@ void FixMDRradiusUpdate::end_of_step()
   double * Atot = atom->dvector[index_Atot]; 
   double * Atot_sum = atom->dvector[index_Atot_sum];
   double * ddelta_bar = atom->dvector[index_ddelta_bar];
+
+  double * ddelta_bar0 = atom->dvector[index_ddelta_bar0];
+  double * ddelta_bar1 = atom->dvector[index_ddelta_bar1];
+
   double * psi = atom->dvector[index_psi];
   double * psi_b = atom->dvector[index_psi_b];
 
@@ -143,6 +151,9 @@ void FixMDRradiusUpdate::end_of_step()
     Acon1[i] = 0.0;
     Atot_sum[i] = 0.0;
     ddelta_bar[i] = 0.0;
+
+    ddelta_bar0[i] = ddelta_bar1[i];
+    ddelta_bar1[i] = 0.0;
   }
 }
 

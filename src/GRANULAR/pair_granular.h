@@ -77,6 +77,10 @@ class PairGranular : public Pair {
   int index_Atot;
   int index_Atot_sum;
   int index_ddelta_bar;
+
+  int index_ddelta_bar0;
+  int index_ddelta_bar1;
+
   int index_psi;
   int index_psi_b;
   int index_size_history;

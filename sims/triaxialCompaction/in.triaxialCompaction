@@ -31,6 +31,7 @@ variable mydt equal dt
 variable mystep equal step
 variable mytime equal ${mydt}*v_mystep
 variable ddelta equal ${d}/2000
+#variable ddelta equal 0.25
 variable slope equal ${ddelta}/${mydt}
 variable disp equal ${slope}*v_mytime
 variable disp_neg equal -v_disp
@@ -89,6 +90,7 @@ variable disp7 equal (v_disp-2*(${deltaI}+${deltaII}+${deltaIII}))*v_trigIVload*
 variable disp8 equal (v_disp_neg+2*(${deltaI}+${deltaII}+${deltaIII}+${deltaIV}))*v_trigIVunload*v_untrigIVunload
 
 variable plane_disp equal v_disp1+v_disp2+v_disp3+v_disp4+v_disp5+v_disp6+v_disp7+v_disp8
+#variable plane_disp equal v_disp
 variable plane_disp_neg equal -v_plane_disp
 
 ######################################### ADD IN PLANES ################################################
@@ -138,4 +140,5 @@ fix log all print 1 "${delta} ${fx_neg}" file triaxialCompaction.csv title "del,
 ######################################### BEGIN RUN  ##########################################################
 
 run ${stepsIVunload} upto
+#run 10 upto
 

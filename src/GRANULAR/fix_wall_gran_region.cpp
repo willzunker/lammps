@@ -29,6 +29,7 @@
 #include "region.h"
 #include "update.h"
 #include "variable.h"
+#include <iostream>
 
 using namespace LAMMPS_NS;
 using namespace Granular_NS;
@@ -128,6 +129,8 @@ void FixWallGranRegion::post_force(int /*vflag*/)
   history_update = 1;
   if (update->setupflag) history_update = 0;
   model->history_update = history_update;
+
+  //std::cout << (uint64_t)this << ", " << (uint64_t)model << std::endl;
 
   // if just reneighbored:
   // update rigid body masses for owned atoms if using FixRigid

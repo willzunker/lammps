@@ -46,6 +46,10 @@ class PairGranular : public Pair {
   double memory_usage() override;
   double atom2cut(int) override;
   double radii2cut(double, double) override;
+  size_t get_size_history() const;
+
+  class Granular_NS::GranularModel** models_list; // MOVED HERE FROM PRIVATE FOR MDR MODEL
+  int **types_indices; // MOVED HERE FROM PRIVATE FOR MDR MODEL
 
  protected:
   int freeze_group_bit;
@@ -72,10 +76,10 @@ class PairGranular : public Pair {
   int index_Acon1;
   int index_Atot;
   int index_Atot_sum;
-  int index_ddelta_bar0;
-  int index_ddelta_bar1;
+  int index_ddelta_bar;
   int index_psi;
   int index_psi_b;
+  int index_size_history;
 
   // storage of rigid body masses for use in granular interactions
 
@@ -93,8 +97,6 @@ class PairGranular : public Pair {
 
   // granular models
   int nmodels, maxmodels;
-  class Granular_NS::GranularModel** models_list;
-  int **types_indices;
 
   // optional user-specified global cutoff, per-type user-specified cutoffs
   double **cutoff_type;

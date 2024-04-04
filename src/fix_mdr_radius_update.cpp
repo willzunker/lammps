@@ -97,8 +97,7 @@ void FixMDRradiusUpdate::end_of_step()
   int index_Acon1 = atom->find_custom("Acon1",tmp1,tmp2);        
   int index_Atot = atom->find_custom("Atot",tmp1,tmp2);                   
   int index_Atot_sum = atom->find_custom("Atot_sum",tmp1,tmp2);   
-  int index_ddelta_bar0 = atom->find_custom("ddelta_bar0",tmp1,tmp2);      
-  int index_ddelta_bar1 = atom->find_custom("ddelta_bar1",tmp1,tmp2); 
+  int index_ddelta_bar = atom->find_custom("ddelta_bar",tmp1,tmp2);       
   int index_psi = atom->find_custom("psi",tmp1,tmp2);
   int index_psi_b = atom->find_custom("psi_b",tmp1,tmp2); 
   double * Ro = atom->dvector[index_Ro];
@@ -112,8 +111,7 @@ void FixMDRradiusUpdate::end_of_step()
   double * Acon1 = atom->dvector[index_Acon1];
   double * Atot = atom->dvector[index_Atot]; 
   double * Atot_sum = atom->dvector[index_Atot_sum];
-  double * ddelta_bar0 = atom->dvector[index_ddelta_bar0];
-  double * ddelta_bar1 = atom->dvector[index_ddelta_bar1];
+  double * ddelta_bar = atom->dvector[index_ddelta_bar];
   double * psi = atom->dvector[index_psi];
   double * psi_b = atom->dvector[index_psi_b];
 
@@ -124,7 +122,8 @@ void FixMDRradiusUpdate::end_of_step()
     Atot[i] = 4.0*M_PI*pow(R,2.0) + Atot_sum[i];
 
     const double Vo = 4.0/3.0*M_PI*pow(Ro[i],3.0);
-    (Vgeo[i] < Vo) ? Vgeo[i] = 4.0/3.0*M_PI*pow(R,3.0) - Vcaps[i] : Vgeo[i] = Vo;
+    const double Vgeoi = 4.0/3.0*M_PI*pow(R,3.0) - Vcaps[i];
+    (Vgeoi < Vo) ? Vgeo[i] = Vgeoi : Vgeo[i] = Vo;
 
     const double Afree = Atot[i] - Acon1[i];
     psi[i] = Afree/Atot[i];
@@ -143,8 +142,7 @@ void FixMDRradiusUpdate::end_of_step()
     Acon0[i] = Acon1[i];
     Acon1[i] = 0.0;
     Atot_sum[i] = 0.0;
-    ddelta_bar0[i] = ddelta_bar1[i];
-    ddelta_bar1[i] = 0.0;
+    ddelta_bar[i] = 0.0;
   }
 }
 

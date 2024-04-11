@@ -480,7 +480,6 @@ double GranSubModNormalMDR::calculate_forces()
   const int eps_bar_offset_0 = 20;        // volume-averaged infinitesimal strain tensor
   const int eps_bar_offset_1 = 21;
 
-
   // initialize particle history variables 
   int tmp1, tmp2;
   int index_Ro = atom->find_custom("Ro",tmp1,tmp2);                       // initial radius
@@ -495,10 +494,6 @@ double GranSubModNormalMDR::calculate_forces()
   int index_Atot = atom->find_custom("Atot",tmp1,tmp2);                   // total particle area 
   int index_Atot_sum = atom->find_custom("Atot_sum",tmp1,tmp2);           // running sum of contact area minus cap area
   int index_ddelta_bar = atom->find_custom("ddelta_bar",tmp1,tmp2);       // change in mean surface displacement
-
-  int index_ddelta_bar0 = atom->find_custom("ddelta_bar0",tmp1,tmp2);
-  int index_ddelta_bar1 = atom->find_custom("ddelta_bar1",tmp1,tmp2);
-
   int index_psi = atom->find_custom("psi",tmp1,tmp2);                     // ratio of free surface area to total surface area
   double * Rinitial = atom->dvector[index_Ro];
   double * Vgeo = atom->dvector[index_Vgeo];
@@ -512,10 +507,6 @@ double GranSubModNormalMDR::calculate_forces()
   double * Atot = atom->dvector[index_Atot];
   double * Atot_sum = atom->dvector[index_Atot_sum];
   double * ddelta_bar = atom->dvector[index_ddelta_bar];
-
-  double * ddelta_bar0 = atom->dvector[index_ddelta_bar0];
-  double * ddelta_bar1 = atom->dvector[index_ddelta_bar1];
-
   double * psi = atom->dvector[index_psi];
 
   for (int contactSide = 0; contactSide < 2; contactSide++) { 
@@ -594,8 +585,8 @@ double GranSubModNormalMDR::calculate_forces()
     double ddelta_MDR;
     double ddelta_BULK;
     if ( psi[i] < psi_b ) { // if true, bulk response has triggered, split displacement increment between the MDR and BULK components 
-      ddelta_MDR = std::min(ddelta-ddelta_bar0[i], delta-*delta_MDR_offset);
-      ddelta_BULK = ddelta_bar0[i];
+      ddelta_MDR = std::min(ddelta-ddelta_bar[i], delta-*delta_MDR_offset);
+      ddelta_BULK = ddelta_bar[i];
     } else { // if false, no bulk response, full displacement increment goes to the MDR component
       ddelta_BULK = 0.0;
       ddelta_MDR = ddelta;
@@ -714,6 +705,8 @@ double GranSubModNormalMDR::calculate_forces()
       if ( std::isnan(F_MDR) ) std::cout << "F_MDR is NaN, non-adhesive case" << std::endl;
     }
     
+    //std::cout << gm->i << ", " << gm->j << ", " << gm->contact_type << ", " << F_MDR << ", " << R << ", " << Ro << std::endl;
+
     // area related calculations 
     double Ac; 
     (*Yflag_offset == 0.0) ? Ac = M_PI*delta*R : Ac = M_PI*((2.0*delta*R - pow(delta,2.0)) + cA/M_PI);
@@ -732,13 +725,13 @@ double GranSubModNormalMDR::calculate_forces()
     // total force calculation
     (contactSide == 0) ? F0 = F_MDR + F_BULK : F1 = F_MDR + F_BULK;
 
+
     // contact penalty scheme
     //double * const pij = &sidata.contact_history[penalty_offset_];
     //const double wij = std::max(1.0-pij[0],0.0);
     const double wij = 1.0;
 
     // mean surface dipslacement calculation
-     if (Acon0[i] > 0.0) ddelta_bar1[i] += wij*Ac/Acon0[i]*ddelta;
      *Ac_offset = Ac;
 
     // radius update scheme quantity calculation
@@ -761,12 +754,34 @@ double GranSubModNormalMDR::calculate_forces()
     }
     *eps_bar_offset = eps_bar_contact;
 
-    std::cout << psi_b << ", " << psi[i] << ", " << A << ", " << B << ", " << pY << ", " << amax << " || " << deltao << ", " << delta << ", " << ddelta << ", " << *delta_offset << ", " << ddelta_bar[i] << " || " << delta_MDR << ", " << ddelta_MDR << ", " << *delta_MDR_offset << ", " << deltamax_MDR << " || " << delta_BULK << ", " << ddelta_BULK << ", " << *delta_BULK_offset << " || " << R << " || " << Ac << ", " << *Ac_offset << ", " << Acon0[i] << ", " << Acon1[i] << " || " << F_MDR << ", " << F_BULK << ", " << Vgeo[i] << std::endl;
+    //std::cout << psi_b << ", " << psi[i] << ", " << A << ", " << B << ", " << pY << ", " << amax << " || " << deltao << ", " << delta << ", " << ddelta << ", " << *delta_offset << ", " << ddelta_bar[i] << " || " << delta_MDR << ", " << ddelta_MDR << ", " << *delta_MDR_offset << ", " << deltamax_MDR << " || " << delta_BULK << ", " << ddelta_BULK << ", " << *delta_BULK_offset << " || " << R << " || " << Ac << ", " << *Ac_offset << ", " << Acon0[i] << ", " << Acon1[i] << " || " << F_MDR << ", " << F_BULK << ", " << Vgeo[i] << std::endl;
+
+
 
   }
 
-  F = (F0 + F1)/2;
-  
+  (gm->contact_type != PAIR) ? F = F0 : F = (F0 + F1)/2;
+
+  // calculate damping force
+  if (F > 0.0) {
+    double Eeff;
+    double Reff;
+    if (gm->contact_type == PAIR) {
+      Eeff = E/(2.0*(1.0-pow(nu,2.0)));
+      Reff = pow((1/gm->radi + 1/gm->radj),-1);
+    } else {
+      Eeff = E/(1.0-pow(nu,2.0));
+      Reff = gm->radi;
+    }
+    const double kn = Eeff*Reff;
+    const double beta = -log(CoR)/sqrt(pow(log(CoR),2.0) + M_PI*M_PI);
+    const double damp_prefactor = beta*sqrt(gm->meff*kn);
+    const double F_DAMP = -damp_prefactor*(gm->vnnr);
+
+    //std:: cout << gm->contact_type << ", " << Eeff << " , " << Reff << ", " << gm->radi << ", " << gm->radj << " || " << kn << ", " << beta << ", " << gm->meff << " || " << F_DAMP << ", " << F << std::endl;
+    F += F_DAMP;
+  }
+
   return F;
 }
 

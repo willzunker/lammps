@@ -51,6 +51,8 @@ class PairGranular : public Pair {
   class Granular_NS::GranularModel** models_list; // MOVED HERE FROM PRIVATE FOR MDR MODEL
   int **types_indices; // MOVED HERE FROM PRIVATE FOR MDR MODEL
 
+  class FixStoreAtom * fix_store;
+
  protected:
   int freeze_group_bit;
   int use_history;
@@ -77,13 +79,10 @@ class PairGranular : public Pair {
   int index_Atot;
   int index_Atot_sum;
   int index_ddelta_bar;
-
-  int index_ddelta_bar0;
-  int index_ddelta_bar1;
-
   int index_psi;
   int index_psi_b;
-  int index_size_history;
+  int index_history_setup_flag;
+  //int index_size_history;
 
   // storage of rigid body masses for use in granular interactions
 

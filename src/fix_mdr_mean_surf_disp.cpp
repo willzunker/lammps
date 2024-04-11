@@ -66,8 +66,6 @@ void FixMDRmeanSurfDisp::setup(int /*vflag*/)
 
 void FixMDRmeanSurfDisp::pre_force(int)
 {
-  // update the apparent radius of every particle
-
   int tmp1, tmp2;
   int index_Acon0 = atom->find_custom("Acon0",tmp1,tmp2);                 
   int index_ddelta_bar = atom->find_custom("ddelta_bar",tmp1,tmp2);             

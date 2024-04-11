@@ -45,12 +45,13 @@ FixMDRradiusUpdate::FixMDRradiusUpdate(LAMMPS *lmp, int narg, char **arg) :
 int FixMDRradiusUpdate::setmask()
 {
   int mask = 0;
-  mask |= END_OF_STEP;
+  mask |= PRE_FORCE | END_OF_STEP;
   return mask;
 }
 
-void FixMDRradiusUpdate::setup(int /*vflag*/)
+void FixMDRradiusUpdate::pre_force(int)
 {
+
   // assign correct value to initially non-zero MDR particle history variables 
   int tmp1, tmp2;
   int index_Ro = atom->find_custom("Ro",tmp1,tmp2);
@@ -58,25 +59,30 @@ void FixMDRradiusUpdate::setup(int /*vflag*/)
   int index_Velas = atom->find_custom("Velas",tmp1,tmp2);
   int index_Atot = atom->find_custom("Atot",tmp1,tmp2);                   
   int index_psi = atom->find_custom("psi",tmp1,tmp2);
-  int index_psi_b = atom->find_custom("psi_b",tmp1,tmp2);       
+  int index_psi_b = atom->find_custom("psi_b",tmp1,tmp2);
+  int index_history_setup_flag = atom->find_custom("history_setup_flag",tmp1,tmp2);         
   double * Ro = atom->dvector[index_Ro];
   double * Vgeo = atom->dvector[index_Vgeo];
   double * Velas = atom->dvector[index_Velas];
   double * Atot = atom->dvector[index_Atot];
   double * psi = atom->dvector[index_psi];
   double * psi_b = atom->dvector[index_psi_b];
+  double * history_setup_flag = atom->dvector[index_history_setup_flag];
 
   double *radius = atom->radius;
   int nlocal = atom->nlocal;
+
   for (int i = 0; i < nlocal; i++) { 
-    Ro[i] = radius[i];
-    Vgeo[i] = 4.0/3.0*M_PI*pow(Ro[i],3.0);
-    Velas[i] = 4.0/3.0*M_PI*pow(Ro[i],3.0);
-    Atot[i] = 4.0*M_PI*pow(Ro[i],2.0);
-    psi[i] = 1.0;
-    psi_b[i] = 0.08;
+    if (history_setup_flag[i] == 0.0) {
+      Ro[i] = radius[i];
+      Vgeo[i] = 4.0/3.0*M_PI*pow(Ro[i],3.0);
+      Velas[i] = 4.0/3.0*M_PI*pow(Ro[i],3.0);
+      Atot[i] = 4.0*M_PI*pow(Ro[i],2.0);
+      psi[i] = 1.0;
+      psi_b[i] = 0.08;
+      history_setup_flag[i] = 1.0;
+    }
   }
-  end_of_step();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -97,11 +103,7 @@ void FixMDRradiusUpdate::end_of_step()
   int index_Acon1 = atom->find_custom("Acon1",tmp1,tmp2);        
   int index_Atot = atom->find_custom("Atot",tmp1,tmp2);                   
   int index_Atot_sum = atom->find_custom("Atot_sum",tmp1,tmp2);   
-  int index_ddelta_bar = atom->find_custom("ddelta_bar",tmp1,tmp2);     
-
-  int index_ddelta_bar0 = atom->find_custom("ddelta_bar0",tmp1,tmp2); 
-  int index_ddelta_bar1 = atom->find_custom("ddelta_bar1",tmp1,tmp2); 
-
+  int index_ddelta_bar = atom->find_custom("ddelta_bar",tmp1,tmp2);       
   int index_psi = atom->find_custom("psi",tmp1,tmp2);
   int index_psi_b = atom->find_custom("psi_b",tmp1,tmp2); 
   double * Ro = atom->dvector[index_Ro];
@@ -116,22 +118,20 @@ void FixMDRradiusUpdate::end_of_step()
   double * Atot = atom->dvector[index_Atot]; 
   double * Atot_sum = atom->dvector[index_Atot_sum];
   double * ddelta_bar = atom->dvector[index_ddelta_bar];
-
-  double * ddelta_bar0 = atom->dvector[index_ddelta_bar0];
-  double * ddelta_bar1 = atom->dvector[index_ddelta_bar1];
-
   double * psi = atom->dvector[index_psi];
   double * psi_b = atom->dvector[index_psi_b];
 
   double *radius = atom->radius;
   int nlocal = atom->nlocal;
   for (int i = 0; i < nlocal; i++) {
+    
     const double R = radius[i];
     Atot[i] = 4.0*M_PI*pow(R,2.0) + Atot_sum[i];
 
     const double Vo = 4.0/3.0*M_PI*pow(Ro[i],3.0);
     const double Vgeoi = 4.0/3.0*M_PI*pow(R,3.0) - Vcaps[i];
-    (Vgeoi < Vo) ? Vgeo[i] = Vgeoi : Vgeo[i] = Vo;
+    Vgeo[i] = std::min(Vgeoi,Vo);
+    //(Vgeoi < Vo) ? Vgeo[i] = Vgeoi : Vgeo[i] = Vo;
 
     const double Afree = Atot[i] - Acon1[i];
     psi[i] = Afree/Atot[i];
@@ -151,9 +151,6 @@ void FixMDRradiusUpdate::end_of_step()
     Acon1[i] = 0.0;
     Atot_sum[i] = 0.0;
     ddelta_bar[i] = 0.0;
-
-    ddelta_bar0[i] = ddelta_bar1[i];
-    ddelta_bar1[i] = 0.0;
   }
 }
 

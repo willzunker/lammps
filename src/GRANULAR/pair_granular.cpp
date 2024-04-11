@@ -32,11 +32,13 @@
 #include "math_extra.h"
 #include "memory.h"
 #include "modify.h"
+#include "group.h"
 #include "neigh_list.h"
 #include "neighbor.h"
 #include "update.h"
 
 #include <cstring>
+#include <iostream>
 
 using namespace LAMMPS_NS;
 using namespace Granular_NS;
@@ -194,6 +196,8 @@ void PairGranular::compute(int eflag, int vflag)
       jtype = type[j];
       model = models_list[types_indices[itype][jtype]];
 
+      //std::cout << "Pair Granular: " << i << ", " << j << std::endl;
+
       // Reset model and copy initial geometric data
       model->xi = x[i];
       model->xj = x[j];
@@ -201,6 +205,16 @@ void PairGranular::compute(int eflag, int vflag)
       model->radj = radius[j];
       model->i = i;
       model->j = j;
+
+      /*
+      if (radius[i] < 0.00065 || radius[j] < 0.00065) {
+        std::cout << "Pair Granular: " << i << ", " << j << " || " << radius[i] << ", " << radius[j] << std::endl;
+      }
+
+      if (std::isnan(radius[i]) || std::isnan(radius[j])) {
+        std::cout << "Pair Granular: " << i << ", " << j << " || " << radius[i] << ", " << radius[j] << std::endl;
+      }
+      */
 
       if (use_history) model->touch = touch[jj];
 
@@ -488,12 +502,16 @@ void PairGranular::init_style()
   } 
   */
 
+  std::cout << "MDR history variables have been initialized" << std::endl;
+
+ // if model != MDR don't do this might be good.
+
   // FOR MDR CONTACT MODEL
   //Store persistent per atom quantities
   if (! fix_flag) {
     int tmp1, tmp2;
     const char * id_fix = "MDR_PARTICLE_HISTORY_VARIABLES";
-    modify->add_fix(fmt::format("{} all property/atom d_Ro d_Vcaps d_Vgeo d_Velas d_eps_bar d_dRnumerator d_dRdenominator d_Acon0 d_Acon1 d_Atot d_Atot_sum d_ddelta_bar d_psi d_psi_b d_ddelta_bar0 d_ddelta_bar1 ghost yes", id_fix));
+    modify->add_fix(fmt::format("{} all property/atom d_Ro d_Vcaps d_Vgeo d_Velas d_eps_bar d_dRnumerator d_dRdenominator d_Acon0 d_Acon1 d_Atot d_Atot_sum d_ddelta_bar d_psi d_psi_b d_history_setup_flag ghost yes", id_fix));
     // d2_volSums 4 --> allows an array of 4 to defined.
     index_Ro = atom->find_custom("Ro",tmp1,tmp2);                       // initial radius
     index_Vcaps = atom->find_custom("Vcaps",tmp1,tmp2);                 // spherical cap volume from intersection of apparent radius particle and contact planes
@@ -507,19 +525,26 @@ void PairGranular::init_style()
     index_Atot = atom->find_custom("Atot",tmp1,tmp2);                   // total particle area 
     index_Atot_sum = atom->find_custom("Atot_sum",tmp1,tmp2);           // running sum of contact area minus cap area
     index_ddelta_bar = atom->find_custom("ddelta_bar",tmp1,tmp2);       // change in mean surface displacement
-
-    index_ddelta_bar0 = atom->find_custom("ddelta_bar0",tmp1,tmp2);
-    index_ddelta_bar1 = atom->find_custom("ddelta_bar1",tmp1,tmp2);
-
     index_psi = atom->find_custom("psi",tmp1,tmp2);                     // ratio of free surface area to total surface area
     index_psi_b = atom->find_custom("psi_b",tmp1,tmp2);                 // 
+    index_history_setup_flag = atom->find_custom("history_setup_flag",tmp1,tmp2);  
 
     //index_volSums = atom->find_custom("volSums",tmp1,tmp2);
 
     // Initiate MDR radius update fix
     modify->add_fix("fix_mdr_radius_update all mdr/radius/update");
-    //modify->add_fix("fix_mdr_mean_surf_disp all mdr/mean/surf/disp");
-    
+    modify->add_fix("fix_mdr_mean_surf_disp all mdr/mean/surf/disp");
+
+    //const char * id_ifx = "my_id";
+    //fix_store = dynamic_cast<FixStoreAtom *>(modify->add_fix(fmt::format("{} {} STORE/ATOM 6 0 1 1", id_fix, group->names[igroup])));
+    //double **saved_stress = fix_store->astore;
+    //to write use:
+    //for (particle loop over i)    
+    //for (int a = 0; a < 6; a++)
+    //  saved_stress[i][a] = stress[i][a];
+    // f_my_id[0]
+    // f_psi_b[0]
+
     fix_flag = 1;
   }  
 
@@ -757,6 +782,8 @@ double PairGranular::single(int i, int j, int itype, int jtype,
     error->all(FLERR,"Not enough atoms for pair granular single function");
 
   class GranularModel* model = models_list[types_indices[itype][jtype]];
+
+
 
   // Reset model and copy initial geometric data
   double **x = atom->x;

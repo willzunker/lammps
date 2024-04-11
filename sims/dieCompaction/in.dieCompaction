@@ -140,4 +140,3 @@ fix log all print 1 "${delta} ${fx_neg} ${fy_neg}" file dieCompaction.csv title 
 ######################################### BEGIN RUN  ##########################################################
 
 run ${stepsIVunload} upto
-

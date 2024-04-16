@@ -495,6 +495,9 @@ double GranSubModNormalMDR::calculate_forces()
   int index_Atot_sum = atom->find_custom("Atot_sum",tmp1,tmp2);           // running sum of contact area minus cap area
   int index_ddelta_bar = atom->find_custom("ddelta_bar",tmp1,tmp2);       // change in mean surface displacement
   int index_psi = atom->find_custom("psi",tmp1,tmp2);                     // ratio of free surface area to total surface area
+  int index_sigmaxx = atom->find_custom("sigmaxx",tmp1,tmp2);             // xx-component of the stress tensor, not necessary for force calculation
+  int index_sigmayy = atom->find_custom("sigmayy",tmp1,tmp2);             // yy-component of the stress tensor, not necessary for force calculation  
+  int index_sigmazz = atom->find_custom("sigmazz",tmp1,tmp2);             // zz-component of the stress tensor, not necessary for force calculation   
   double * Rinitial = atom->dvector[index_Ro];
   double * Vgeo = atom->dvector[index_Vgeo];
   double * Velas = atom->dvector[index_Velas];
@@ -508,6 +511,9 @@ double GranSubModNormalMDR::calculate_forces()
   double * Atot_sum = atom->dvector[index_Atot_sum];
   double * ddelta_bar = atom->dvector[index_ddelta_bar];
   double * psi = atom->dvector[index_psi];
+  double * sigmaxx = atom->dvector[index_sigmaxx];
+  double * sigmayy = atom->dvector[index_sigmayy];
+  double * sigmazz = atom->dvector[index_sigmazz];
 
   for (int contactSide = 0; contactSide < 2; contactSide++) { 
 
@@ -754,9 +760,10 @@ double GranSubModNormalMDR::calculate_forces()
     }
     *eps_bar_offset = eps_bar_contact;
 
+    sigmaxx[i] += (1.0/Velas[i])*(fx*bx);
+    sigmayy[i] += (1.0/Velas[i])*(fy*by);
+    sigmazz[i] += (1.0/Velas[i])*(fz*bz);
     //std::cout << psi_b << ", " << psi[i] << ", " << A << ", " << B << ", " << pY << ", " << amax << " || " << deltao << ", " << delta << ", " << ddelta << ", " << *delta_offset << ", " << ddelta_bar[i] << " || " << delta_MDR << ", " << ddelta_MDR << ", " << *delta_MDR_offset << ", " << deltamax_MDR << " || " << delta_BULK << ", " << ddelta_BULK << ", " << *delta_BULK_offset << " || " << R << " || " << Ac << ", " << *Ac_offset << ", " << Acon0[i] << ", " << Acon1[i] << " || " << F_MDR << ", " << F_BULK << ", " << Vgeo[i] << std::endl;
-
-
 
   }
 

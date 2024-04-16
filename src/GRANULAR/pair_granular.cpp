@@ -511,23 +511,26 @@ void PairGranular::init_style()
   if (! fix_flag) {
     int tmp1, tmp2;
     const char * id_fix = "MDR_PARTICLE_HISTORY_VARIABLES";
-    modify->add_fix(fmt::format("{} all property/atom d_Ro d_Vcaps d_Vgeo d_Velas d_eps_bar d_dRnumerator d_dRdenominator d_Acon0 d_Acon1 d_Atot d_Atot_sum d_ddelta_bar d_psi d_psi_b d_history_setup_flag ghost yes", id_fix));
+    modify->add_fix(fmt::format("{} all property/atom d_Ro d_Vcaps d_Vgeo d_Velas d_eps_bar d_dRnumerator d_dRdenominator d_Acon0 d_Acon1 d_Atot d_Atot_sum d_ddelta_bar d_psi d_psi_b d_history_setup_flag d_sigmaxx d_sigmayy d_sigmazz ghost yes", id_fix));
     // d2_volSums 4 --> allows an array of 4 to defined.
-    index_Ro = atom->find_custom("Ro",tmp1,tmp2);                       // initial radius
-    index_Vcaps = atom->find_custom("Vcaps",tmp1,tmp2);                 // spherical cap volume from intersection of apparent radius particle and contact planes
-    index_Vgeo = atom->find_custom("Vgeo",tmp1,tmp2);                   // geometric particle volume of apparent particle after removing spherical cap volume
-    index_Velas = atom->find_custom("Velas",tmp1,tmp2);                 // particle volume from linear elasticity  
-    index_eps_bar = atom->find_custom("eps_bar",tmp1,tmp2);             // volume-averaged infinitesimal strain tensor
-    index_dRnumerator = atom->find_custom("dRnumerator",tmp1,tmp2);     // summation of numerator terms in calculation of dR
-    index_dRdenominator = atom->find_custom("dRdenominator",tmp1,tmp2); // summation of denominator terms in calculation of dR
-    index_Acon0 = atom->find_custom("Acon0",tmp1,tmp2);                 // total area involved in contacts: Acon^{n} 
-    index_Acon1 = atom->find_custom("Acon1",tmp1,tmp2);                 // total area involved in contacts: Acon^{n+1}
-    index_Atot = atom->find_custom("Atot",tmp1,tmp2);                   // total particle area 
-    index_Atot_sum = atom->find_custom("Atot_sum",tmp1,tmp2);           // running sum of contact area minus cap area
-    index_ddelta_bar = atom->find_custom("ddelta_bar",tmp1,tmp2);       // change in mean surface displacement
-    index_psi = atom->find_custom("psi",tmp1,tmp2);                     // ratio of free surface area to total surface area
-    index_psi_b = atom->find_custom("psi_b",tmp1,tmp2);                 // 
-    index_history_setup_flag = atom->find_custom("history_setup_flag",tmp1,tmp2);  
+    index_Ro = atom->find_custom("Ro",tmp1,tmp2);                                 // initial radius
+    index_Vcaps = atom->find_custom("Vcaps",tmp1,tmp2);                           // spherical cap volume from intersection of apparent radius particle and contact planes
+    index_Vgeo = atom->find_custom("Vgeo",tmp1,tmp2);                             // geometric particle volume of apparent particle after removing spherical cap volume
+    index_Velas = atom->find_custom("Velas",tmp1,tmp2);                           // particle volume from linear elasticity  
+    index_eps_bar = atom->find_custom("eps_bar",tmp1,tmp2);                       // volume-averaged infinitesimal strain tensor
+    index_dRnumerator = atom->find_custom("dRnumerator",tmp1,tmp2);               // summation of numerator terms in calculation of dR
+    index_dRdenominator = atom->find_custom("dRdenominator",tmp1,tmp2);           // summation of denominator terms in calculation of dR
+    index_Acon0 = atom->find_custom("Acon0",tmp1,tmp2);                           // total area involved in contacts: Acon^{n} 
+    index_Acon1 = atom->find_custom("Acon1",tmp1,tmp2);                           // total area involved in contacts: Acon^{n+1}
+    index_Atot = atom->find_custom("Atot",tmp1,tmp2);                             // total particle area 
+    index_Atot_sum = atom->find_custom("Atot_sum",tmp1,tmp2);                     // running sum of contact area minus cap area
+    index_ddelta_bar = atom->find_custom("ddelta_bar",tmp1,tmp2);                 // change in mean surface displacement
+    index_psi = atom->find_custom("psi",tmp1,tmp2);                               // ratio of free surface area to total surface area
+    index_psi_b = atom->find_custom("psi_b",tmp1,tmp2);                           // TEMPORARY, SINCE PSI_B IS ALREADY DEFINED IN THE INPUT SCRIPT
+    index_history_setup_flag = atom->find_custom("history_setup_flag",tmp1,tmp2); // flag to check if history variables have been initialized 
+    index_sigmaxx = atom->find_custom("sigmaxx",tmp1,tmp2);                       // xx-component of the stress tensor, not necessary for force calculation
+    index_sigmayy = atom->find_custom("sigmayy",tmp1,tmp2);                       // yy-component of the stress tensor, not necessary for force calculation  
+    index_sigmazz = atom->find_custom("sigmazz",tmp1,tmp2);                       // zz-component of the stress tensor, not necessary for force calculation   
 
     //index_volSums = atom->find_custom("volSums",tmp1,tmp2);
 

@@ -28,6 +28,9 @@
 #include "modify.h"
 #include "variable.h"
 #include <iostream>
+#include "csv_writer.h"
+#include <iomanip> 
+#include <sstream>
 
 using namespace LAMMPS_NS;
 using namespace FixConst;
@@ -106,6 +109,9 @@ void FixMDRradiusUpdate::end_of_step()
   int index_ddelta_bar = atom->find_custom("ddelta_bar",tmp1,tmp2);       
   int index_psi = atom->find_custom("psi",tmp1,tmp2);
   int index_psi_b = atom->find_custom("psi_b",tmp1,tmp2); 
+  int index_sigmaxx = atom->find_custom("sigmaxx",tmp1,tmp2);             
+  int index_sigmayy = atom->find_custom("sigmayy",tmp1,tmp2);               
+  int index_sigmazz = atom->find_custom("sigmazz",tmp1,tmp2);             
   double * Ro = atom->dvector[index_Ro];
   double * Vgeo = atom->dvector[index_Vgeo];
   double * Velas = atom->dvector[index_Velas];
@@ -120,9 +126,16 @@ void FixMDRradiusUpdate::end_of_step()
   double * ddelta_bar = atom->dvector[index_ddelta_bar];
   double * psi = atom->dvector[index_psi];
   double * psi_b = atom->dvector[index_psi_b];
+  double * sigmaxx = atom->dvector[index_sigmaxx];
+  double * sigmayy = atom->dvector[index_sigmayy];
+  double * sigmazz = atom->dvector[index_sigmazz];
 
   double *radius = atom->radius;
   int nlocal = atom->nlocal;
+  double sigmaxx_sum = 0.0;
+  double sigmayy_sum = 0.0;
+  double sigmazz_sum = 0.0; 
+  double Vparticles = 0.0;
   for (int i = 0; i < nlocal; i++) {
     
     const double R = radius[i];
@@ -151,7 +164,28 @@ void FixMDRradiusUpdate::end_of_step()
     Acon1[i] = 0.0;
     Atot_sum[i] = 0.0;
     ddelta_bar[i] = 0.0;
+
+
+    sigmaxx_sum += sigmaxx[i];
+    sigmayy_sum += sigmayy[i];
+    sigmazz_sum += sigmazz[i];
+    Vparticles += Velas[i];
+
+    sigmaxx[i] = 0.0;
+    sigmayy[i] = 0.0;
+    sigmazz[i] = 0.0;
   }
+
+  double sigmaxx_avg = sigmaxx_sum/nlocal;
+  double sigmayy_avg = sigmayy_sum/nlocal;
+  double sigmazz_avg = sigmazz_sum/nlocal;
+
+  CSVWriter csvWriter("/Users/willzunker/lammps/sims/avicelTableting/avgStresses.csv");
+  std::stringstream rowDataStream;
+  rowDataStream << std::scientific << std::setprecision(4); // Set the format and precision
+  rowDataStream << sigmaxx_avg << ", " << sigmayy_avg << ", " << sigmazz_avg << ", " << Vparticles;
+  std::string rowData = rowDataStream.str();
+  csvWriter.writeRow(rowData);
 }
 
 //std::cout << radius[i] << ", " << dR << ", " << dRnumerator[i] << ", " << dRdenominator[i] << ", " << dRdenominator[i] - 4.0*M_PI*pow(R,2.0)  << std::endl;

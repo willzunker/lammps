@@ -15,12 +15,6 @@ boundary f f f
 region simBox block -0.05 0.05 -0.05 0.05 -0.05 0.05 units box
 create_box 1 simBox
 
-########################### PARTICLE MATERIAL PROPERTIES AND FORCE MODEL ###############################
-
-pair_style granular
-# E, nu, Y, gamma, psi_b, CoR
-pair_coeff * * mdr 1e8 0.3 1e6 100 0.08 0.5 tangential linear_nohistory 0.0 0.0
-
 ######################################### ADD DIE AND ATOM PARAMETERIZATION ##############################################
 
 variable numberOfAtoms           equal 100
@@ -37,11 +31,31 @@ variable insertionUpperBound     equal ${dieHeight}-1.5*${atomRadius}
 
 region  atomInsertionRegion cylinder z 0 0 ${insertionRadius} ${insertionLowerBound} ${insertionUpperBound} side in units box
 
+########################### PARTICLE MATERIAL PROPERTIES AND FORCE MODEL ###############################
+
+pair_style granular
+# mdr = E, nu, Y, gamma, psi_b, CoR
+# linear_history = k_t, x_gamma,t, mu_s 
+variable YoungsModulus equal 1e8
+variable PoissonsRatio equal 0.3
+variable YieldStress equal 1e6
+variable SurfaceEnergy equal 100
+variable SurfaceEnergyWall equal 0.0
+variable psi_b equal 0.08
+variable CoR equal 0.5
+variable kt equal ${YoungsModulus}*${atomRadius}
+variable xgammat equal 0.0
+variable mu_s equal 0.5
+variable k_roll equal ${YoungsModulus}*${atomRadius}
+variable gamma_roll equal ${atomRadius}^2*sqrt(${atomDensity}*${YoungsModulus})
+variable mu_roll equal 1.0
+pair_coeff * * mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEnergy} ${psi_b} ${CoR} damping none tangential linear_history ${kt} ${xgammat} ${mu_s} rolling sds ${k_roll} ${gamma_roll} ${mu_roll}
+
 ##################################### DEFINE RUN CONTROL VARIBLES  #############################################
 
 variable settlingSteps equal 150000
 variable zInitalPunchPosition equal ${dieHeight} 
-variable zFinalPunchPosition  equal ${dieHeight}*0.3
+variable zFinalPunchPosition  equal ${dieHeight}*0.35
 variable compressionStartStep equal ${settlingSteps}
 variable compressionEndStep equal 250000
 variable ejectionEndStep equal 300000
@@ -59,7 +73,7 @@ variable lowerPunchAmplitude equal ${dieHeight}
 
 ######################################### ADD DIE AND PUNCH WALLS ################################################
 
-variable wall_contact_string string "granular mdr 1e8 0.3 1e6 0.0 0.08 0.5 tangential linear_nohistory 0.0 0.0"
+variable wall_contact_string string "granular mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEnergyWall} ${psi_b} ${CoR} damping none tangential linear_history ${kt} ${xgammat} ${mu_s} rolling sds ${k_roll} ${gamma_roll} ${mu_roll}"
 
 region lowerPunch plane 0 0 0 0 0 1 side in units box
 region upperPunch plane 0 0 ${dieHeight} 0 0 -1 side in move NULL NULL v_zPunchDisplacement units box
@@ -90,10 +104,9 @@ thermo_modify lost ignore norm no
 dump dumpParticles all vtk 1000 post/particles_*.vtk id x y z fx fy fz 
 #dump 1 all custom 1 uniaxialCompression id type f_plane_yz_neg[*]
 
-#variable ax_yz_neg atom f_plane_yz_neg[5]
-#variable afx_yz_neg atom f_plane_yz_neg[2]
-#variable xpos equal v_ax_yz_neg[1]
-#variable delta equal ${d}/2+v_xpos
+#variable az_upperPunch atom f_upperPunch[7]
+#variable afz_upperPunch atom f_upperPunch[4]
+#variable disp equal v_az_upperPunch[1]
 #variable fx_neg equal v_afx_yz_neg[1]
 #fix log all print 1 "${delta} ${fx_neg}" file uniaxialCompression.csv title "del,fx_yz_neg" screen no
 

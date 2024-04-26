@@ -16,9 +16,12 @@
 #include "granular_model.h"
 #include "math_const.h"
 #include "atom.h"
+#include "csv_writer.h"
 
 #include <cmath>
 #include <iostream>
+#include <iomanip> 
+#include <sstream>
 
 using namespace LAMMPS_NS;
 using namespace Granular_NS;
@@ -113,7 +116,7 @@ void GranSubModNormalHooke::coeffs_to_local()
 
 double GranSubModNormalHooke::calculate_forces()
 {
-  std::cout << "F Hooke is: " << k * gm->delta << std::endl;
+  std::cout << "F Hooke is: " << k * gm->delta << ", " << gm->i << ", " << gm->j << ", " << gm->radi << std::endl;
   return k * gm->delta;
 }
 
@@ -397,13 +400,11 @@ GranSubModNormalMDR::GranSubModNormalMDR(GranularModel *gm, LAMMPS *lmp) :
 {
   num_coeffs = 6; // Young's Modulus, Poisson's ratio, yield stress, effective surface energy, psi_b, coefficent of restitution
   contact_radius_flag = 1;
-  size_history = 22;
+  size_history = 23;
 
   nondefault_history_transfer = 1;
   transfer_history_factor = new double[size_history];
   transfer_history_factor[0] = +1;
-
-  std::cout << "MDR contact model has been initialized." << std::endl;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -479,6 +480,7 @@ double GranSubModNormalMDR::calculate_forces()
   const int Ac_offset_1 = 19;
   const int eps_bar_offset_0 = 20;        // volume-averaged infinitesimal strain tensor
   const int eps_bar_offset_1 = 21;
+  const int penalty_offset_ = 22;          // contact penalty 
 
   // initialize particle history variables 
   int tmp1, tmp2;
@@ -515,9 +517,10 @@ double GranSubModNormalMDR::calculate_forces()
   double * sigmayy = atom->dvector[index_sigmayy];
   double * sigmazz = atom->dvector[index_sigmazz];
 
+  double * history = & gm->history[history_index]; // load in all history variables  
+
   for (int contactSide = 0; contactSide < 2; contactSide++) { 
 
-    double * history = & gm->history[history_index]; // load in all history variables   
     double * delta_offset; 
     double * deltao_offset;
     double * delta_MDR_offset;   
@@ -529,6 +532,7 @@ double GranSubModNormalMDR::calculate_forces()
     double * aAdh_offset; 
     double * Ac_offset; 
     double * eps_bar_offset; 
+    double * penalty_offset;
      
     if (contactSide == 0) {
       if (gm->contact_type == PAIR) {
@@ -642,6 +646,8 @@ double GranSubModNormalMDR::calculate_forces()
 
     //std::cout << psi_b << ", " << psi[i] << ", " << A << ", " << B << ", " << pY << ", " << amax << " || " << deltao << ", " << delta << ", " << ddelta << ", " << *delta_offset << ", " << ddelta_bar[i] << " || " << delta_MDR << ", " << ddelta_MDR << ", " << *delta_MDR_offset << ", " << deltamax_MDR << " || " << delta_BULK << ", " << ddelta_BULK << ", " << *delta_BULK_offset << " || " << R << std::endl;
     
+    //std::cout << i << ", " << j << ", " << A << ", " << B << " || " << deltao << ", " << delta << ", " << ddelta << ", " << R <<  ", " << M_PI*pow(amax,2.0) << std::endl;
+
     double a_na;
     (deltae1D >= 0.0) ? a_na = B*sqrt(A - deltae1D)*sqrt(deltae1D)/A : a_na = 0.0;
     double aAdh = *aAdh_offset; 
@@ -711,34 +717,43 @@ double GranSubModNormalMDR::calculate_forces()
       if ( std::isnan(F_MDR) ) std::cout << "F_MDR is NaN, non-adhesive case" << std::endl;
     }
     
-    //std::cout << gm->i << ", " << gm->j << ", " << gm->contact_type << ", " << F_MDR << ", " << R << ", " << Ro << std::endl;
+    // contact penalty scheme
+    penalty_offset = & history[penalty_offset_];
+    double pij = *penalty_offset;
+    const double wij = std::max(1.0-pij,0.0);
+
+    //std::cout << gm->i << ", " << gm->j << ", " << gm->contact_type << ", " << *gm->xi[1] << ", " << *gm->xj[1] << std::endl;
 
     // area related calculations 
     double Ac; 
     (*Yflag_offset == 0.0) ? Ac = M_PI*delta*R : Ac = M_PI*((2.0*delta*R - pow(delta,2.0)) + cA/M_PI);
     if (Ac < 0.0 ) Ac = 0.0;
-    Atot_sum[i] += Ac - 2.0*M_PI*R*(deltamax_MDR + delta_BULK);
-    Acon1[i] += Ac;
+    Atot_sum[i] += wij*(Ac - 2.0*M_PI*R*(deltamax_MDR + delta_BULK));
+    Acon1[i] += wij*Ac;
 
     // bulk force calculation
     double F_BULK;
     (delta_BULK <= 0.0) ? F_BULK = 0.0 : F_BULK = (1.0/Vgeo[i])*Acon0[i]*delta_BULK*kappa*Ac;
 
+    //if (F_BULK > 0.0) {
+    //  std::cout << "F_BULK is: " << F_BULK << std::endl;
+    //}
+
     //std::cout << delta_BULK << ", " << F_BULK << ", " << (1.0/Vgeo[i])*Acon0[i]*delta_BULK*kappa*Ac << std::endl;
 
     //std::cout << gm->i << ", " << gm->j << ", " << Vgeo[i] << ", " << Acon0[i] << ", " << Acon1[i] << ", " << Ac << ", " << kappa << " || " << psi[i] << ", " << ddelta_bar[i] << ", " << ddelta << ", " << ddelta_MDR << ", " << ddelta_BULK << ", " << delta << ", " << delta_MDR << ", " << delta_BULK << ", " << F_MDR << ", " << F_BULK << ", " << R << " || " << deltae1D << ", " << A << ", " << B << std::endl;
+
+    //std::cout << gm->i << ", " << gm->j << ", " << (1.0/Vgeo[i])*Acon0[i]*delta_BULK*kappa*Ac << std::endl;
 
     // total force calculation
     (contactSide == 0) ? F0 = F_MDR + F_BULK : F1 = F_MDR + F_BULK;
 
 
-    // contact penalty scheme
-    //double * const pij = &sidata.contact_history[penalty_offset_];
-    //const double wij = std::max(1.0-pij[0],0.0);
-    const double wij = 1.0;
+
+    //std::cout << gm->i << ", " << gm->j << " | " << deltao << ", " << ddelta_bar[i] << ", " << R << ", " << psi[i] << ", " << psi_b << ", " << Ac << " | " << pij << ", " << wij << std::endl;
 
     // mean surface dipslacement calculation
-     *Ac_offset = Ac;
+     *Ac_offset = wij*Ac;
 
     // radius update scheme quantity calculation
     Vcaps[i] += (M_PI/3.0)*pow(delta,2.0)*(3.0*R - delta);
@@ -767,7 +782,20 @@ double GranSubModNormalMDR::calculate_forces()
 
   }
 
-  (gm->contact_type != PAIR) ? F = F0 : F = (F0 + F1)/2;
+  double * penalty_offset = & history[penalty_offset_];
+  const double pij = *penalty_offset;
+  const double wij = std::max(1.0-pij,0.0);
+  *penalty_offset = 0.0;
+
+  //std::cout << gm->i << ", " << gm->j  << ", " << xi << ", " << xj << std::endl;
+
+  // wall force magnifier
+  double * deltao_offset = & history[deltao_offset_0];
+  const double wallForceMagnifer = std::exp(10.0*(*deltao_offset)/Rinitial[gm->i] - 9.0) + 1.0;
+  //const double wallForceMagnifer = 0.0;
+
+  // assign final force
+  (gm->contact_type != PAIR) ? F = wij*F0*wallForceMagnifer : F = wij*(F0 + F1)/2;
 
   // calculate damping force
   if (F > 0.0) {
@@ -786,7 +814,30 @@ double GranSubModNormalMDR::calculate_forces()
     const double F_DAMP = -damp_prefactor*(gm->vnnr);
 
     //std:: cout << gm->contact_type << ", " << Eeff << " , " << Reff << ", " << gm->radi << ", " << gm->radj << " || " << kn << ", " << beta << ", " << gm->meff << " || " << F_DAMP << ", " << F << std::endl;
-    F += F_DAMP;
+    F += wij*F_DAMP;
+  }
+
+  double **x = atom->x;
+  const double xi = x[gm->i][0];
+  const double xj = x[gm->j][0];
+  const double del = 20.0 - abs(xi-xj);
+  
+  if (gm->i == 0 && gm->j == 1) {
+    CSVWriter csvWriter("/Users/willzunker/lammps/sims/compressionSleeve/pairContactsTopCen.csv");
+    std::stringstream rowDataStream;
+    rowDataStream << std::scientific << std::setprecision(4); // Set the format and precision
+    rowDataStream << del << ", " << F;
+    std::string rowData = rowDataStream.str();
+    csvWriter.writeRow(rowData);
+  }
+
+  if (gm->i == 0 && gm->j == 2) {
+    CSVWriter csvWriter("/Users/willzunker/lammps/sims/compressionSleeve/pairContactsBotCen.csv");
+    std::stringstream rowDataStream;
+    rowDataStream << std::scientific << std::setprecision(4); // Set the format and precision
+    rowDataStream << del << ", " << F;
+    std::string rowData = rowDataStream.str();
+    csvWriter.writeRow(rowData);
   }
 
   return F;

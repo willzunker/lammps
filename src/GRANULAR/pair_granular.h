@@ -53,6 +53,8 @@ class PairGranular : public Pair {
 
   class FixStoreAtom * fix_store;
 
+  int nmodels, maxmodels;
+
  protected:
   int freeze_group_bit;
   int use_history;
@@ -101,7 +103,8 @@ class PairGranular : public Pair {
   int heat_flag;
 
   // granular models
-  int nmodels, maxmodels;
+  //int nmodels, maxmodels;
+
 
   // optional user-specified global cutoff, per-type user-specified cutoffs
   double **cutoff_type;

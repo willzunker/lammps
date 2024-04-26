@@ -29,10 +29,15 @@
 #include "variable.h"
 #include <iostream>
 #include "csv_writer.h"
+#include "granular_model.h"
+#include "pair_granular.h"
+#include "pair.h"
+#include "gran_sub_mod_normal.h"
 #include <iomanip> 
 #include <sstream>
 
 using namespace LAMMPS_NS;
+using namespace Granular_NS;
 using namespace FixConst;
 
 /* ---------------------------------------------------------------------- */
@@ -54,6 +59,13 @@ int FixMDRradiusUpdate::setmask()
 
 void FixMDRradiusUpdate::pre_force(int)
 {
+
+  PairGranular * pair = dynamic_cast<PairGranular *>(force->pair_match("granular",1));
+  class GranularModel* model;
+  class GranularModel** models_list = pair->models_list;
+  if (pair->nmodels != 1) error->all(FLERR, "Number of models does not equal 1");
+  model = models_list[0];
+  class GranSubModNormalMDR* norm_model = dynamic_cast<GranSubModNormalMDR *>(model->normal_model);
 
   // assign correct value to initially non-zero MDR particle history variables 
   int tmp1, tmp2;
@@ -82,7 +94,7 @@ void FixMDRradiusUpdate::pre_force(int)
       Velas[i] = 4.0/3.0*M_PI*pow(Ro[i],3.0);
       Atot[i] = 4.0*M_PI*pow(Ro[i],2.0);
       psi[i] = 1.0;
-      psi_b[i] = 0.08;
+      psi_b[i] = norm_model->psi_b;
       history_setup_flag[i] = 1.0;
     }
   }
@@ -136,6 +148,9 @@ void FixMDRradiusUpdate::end_of_step()
   double sigmayy_sum = 0.0;
   double sigmazz_sum = 0.0; 
   double Vparticles = 0.0;
+
+  //std::cout << "New step" << std::endl;
+
   for (int i = 0; i < nlocal; i++) {
     
     const double R = radius[i];
@@ -149,11 +164,16 @@ void FixMDRradiusUpdate::end_of_step()
     const double Afree = Atot[i] - Acon1[i];
     psi[i] = Afree/Atot[i];
 
+    //if (psi[i] < 0.08) {
+    //  std::cout << "psi is: " << psi[i] << std::endl;
+    //}
+
     const double dR = std::max(dRnumerator[i]/(dRdenominator[i] - 4.0*M_PI*pow(R,2.0)),0.0);
-    const double psi_b = 0.08;
-    if (psi_b < psi[i]) { 
+    if (psi_b[i] < psi[i]) { 
       radius[i] += dR;
     }
+
+    //std::cout << i << ", " << radius[i] << " | " << psi_b[i] << ", " << psi[i] << " | " << Acon1[i] << ", " << Atot[i] << std::endl;
 
     Velas[i] = Vo*(1.0 + eps_bar[i]);
     Vcaps[i] = 0.0;

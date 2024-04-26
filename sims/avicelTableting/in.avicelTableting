@@ -6,8 +6,8 @@ comm_modify vel yes
 units si
 newton off
 neighbor      2e-3 bin
-neigh_modify  delay 0
-timestep 1e-6
+neigh_modify every 5 delay 20 check yes
+timestep 1e-7
 
 ######################### SIMULATION BOUNDING BOX, INTEGRATION, AND, GRAVITY ###########################
 
@@ -17,7 +17,7 @@ create_box 1 simBox
 
 ######################################### ADD DIE AND ATOM PARAMETERIZATION ##############################################
 
-variable numberOfAtoms           equal 100
+variable numberOfAtoms           equal 80
 variable atomRadius              equal 0.65e-3
 variable atomDiameter            equal 2*${atomRadius}
 variable atomDiameterLow         equal 0.8*${atomDiameter}
@@ -36,30 +36,31 @@ region  atomInsertionRegion cylinder z 0 0 ${insertionRadius} ${insertionLowerBo
 pair_style granular
 # mdr = E, nu, Y, gamma, psi_b, CoR
 # linear_history = k_t, x_gamma,t, mu_s 
-variable YoungsModulus equal 1e8
+variable YoungsModulus equal 1e10
 variable PoissonsRatio equal 0.3
-variable YieldStress equal 1e6
-variable SurfaceEnergy equal 100
+variable YieldStress equal 1.7e8
+variable SurfaceEnergy equal 250
 variable SurfaceEnergyWall equal 0.0
 variable psi_b equal 0.08
 variable CoR equal 0.5
-variable kt equal ${YoungsModulus}*${atomRadius}
+variable kt equal 0.01*${YoungsModulus}*${atomRadius}
 variable xgammat equal 0.0
-variable mu_s equal 0.5
-variable k_roll equal ${YoungsModulus}*${atomRadius}
+variable mu_s equal 0.7
+variable k_roll equal 0.01*${YoungsModulus}*${atomRadius}
 variable gamma_roll equal ${atomRadius}^2*sqrt(${atomDensity}*${YoungsModulus})
 variable mu_roll equal 1.0
-pair_coeff * * mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEnergy} ${psi_b} ${CoR} damping none tangential linear_history ${kt} ${xgammat} ${mu_s} rolling sds ${k_roll} ${gamma_roll} ${mu_roll}
+#pair_coeff * * mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEnergy} ${psi_b} ${CoR} damping none tangential linear_history ${kt} ${xgammat} ${mu_s} rolling sds ${k_roll} ${gamma_roll} ${mu_roll}
+pair_coeff * * mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEnergy} ${psi_b} ${CoR} tangential linear_nohistory 0.0 0.0 damping none
 
 ##################################### DEFINE RUN CONTROL VARIBLES  #############################################
 
-variable settlingSteps equal 150000
+variable settlingSteps equal round(0.15/dt)
 variable zInitalPunchPosition equal ${dieHeight} 
-variable zFinalPunchPosition  equal ${dieHeight}*0.35
+variable zFinalPunchPosition  equal ${dieHeight}*0.2
 variable compressionStartStep equal ${settlingSteps}
-variable compressionEndStep equal 250000
-variable ejectionEndStep equal 300000
-variable freeFloatEndStep equal 325000
+variable compressionEndStep equal round(0.25/dt)
+variable ejectionEndStep equal round(0.3/dt)
+variable freeFloatEndStep equal round(0.325/dt)
 
 variable punchAmplitude equal -(${zInitalPunchPosition}-${zFinalPunchPosition})
 variable punchFrequency equal PI/2/(dt*(${compressionEndStep}-${compressionStartStep})/2)
@@ -73,7 +74,8 @@ variable lowerPunchAmplitude equal ${dieHeight}
 
 ######################################### ADD DIE AND PUNCH WALLS ################################################
 
-variable wall_contact_string string "granular mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEnergyWall} ${psi_b} ${CoR} damping none tangential linear_history ${kt} ${xgammat} ${mu_s} rolling sds ${k_roll} ${gamma_roll} ${mu_roll}"
+#variable wall_contact_string string "granular mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEnergyWall} ${psi_b} ${CoR} damping none tangential linear_history ${kt} ${xgammat} ${mu_s} rolling sds ${k_roll} ${gamma_roll} ${mu_roll}"
+variable wall_contact_string string "granular mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEnergyWall} ${psi_b} ${CoR} tangential linear_nohistory 0.0 0.0 damping none"
 
 region lowerPunch plane 0 0 0 0 0 1 side in units box
 region upperPunch plane 0 0 ${dieHeight} 0 0 -1 side in move NULL NULL v_zPunchDisplacement units box
@@ -90,7 +92,7 @@ fix print1 all print 1 "${zPunchDisplacement}" file upperPunchMovement.csv scree
 
 fix 1 all nve/sphere
 fix grav all gravity 9.81 vector 0 0 -1
-fix ins1 all pour 100 1 19985583 region atomInsertionRegion diam one ${atomDiameter} dens ${atomDensity} ${atomDensity}
+fix ins1 all pour ${numberOfAtoms} 1 19985583 region atomInsertionRegion diam one ${atomDiameter} dens ${atomDensity} ${atomDensity}
 
 ######################################## SCREEN OUTPUT  ####################################################
 
@@ -101,7 +103,8 @@ thermo_modify lost ignore norm no
 
 ##################################### SET UP DUMP OUTPUTS  ####################################################
 
-dump dumpParticles all vtk 1000 post/particles_*.vtk id x y z fx fy fz 
+variable output_rate equal round(1e-3/dt)
+dump dumpParticles all vtk ${output_rate} post/particles_*.vtk id x y z fx fy fz radius
 #dump 1 all custom 1 uniaxialCompression id type f_plane_yz_neg[*]
 
 #variable az_upperPunch atom f_upperPunch[7]
@@ -112,5 +115,5 @@ dump dumpParticles all vtk 1000 post/particles_*.vtk id x y z fx fy fz
 
 ######################################### BEGIN RUN  ##########################################################
 
-run ${ejectionEndStep} 
+run ${compressionEndStep} 
 

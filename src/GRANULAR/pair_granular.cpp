@@ -504,7 +504,7 @@ void PairGranular::init_style()
 
   std::cout << "MDR history variables have been initialized" << std::endl;
 
- // if model != MDR don't do this might be good.
+ //if (model == mdr) {
 
   // FOR MDR CONTACT MODEL
   //Store persistent per atom quantities
@@ -550,6 +550,7 @@ void PairGranular::init_style()
 
     fix_flag = 1;
   }  
+ //}
 
   // check for FixFreeze and set freeze_group_bit
 

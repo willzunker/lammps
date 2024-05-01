@@ -434,7 +434,7 @@ double GranSubModNormalMDR::calculate_forces()
   // To understand the structure of the overall code it is important to consider 
   // the following:
   //
-  // The MDR contact model was developed by imagining indivdual particles being 
+  // The MDR contact model was developed by imagining individual particles being 
   // squished between a number of rigid flats (references below). To allow  
   // for many interacting particles, we extend the idea of isolated particles surrounded 
   // by rigid flats. In particular, we imagine placing rigid flats at the overlap 

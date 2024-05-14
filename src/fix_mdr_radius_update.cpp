@@ -63,9 +63,16 @@ void FixMDRradiusUpdate::pre_force(int)
   PairGranular * pair = dynamic_cast<PairGranular *>(force->pair_match("granular",1));
   class GranularModel* model;
   class GranularModel** models_list = pair->models_list;
-  if (pair->nmodels != 1) error->all(FLERR, "Number of models does not equal 1");
-  model = models_list[0];
-  class GranSubModNormalMDR* norm_model = dynamic_cast<GranSubModNormalMDR *>(model->normal_model);
+  class GranSubModNormalMDR* norm_model = nullptr;
+  for (int i = 0; i < pair->nmodels; i++) {
+    model = models_list[i];
+    if (model->normal_model->name == "mdr") norm_model = dynamic_cast<GranSubModNormalMDR *>(model->normal_model);
+  }
+  if (norm_model == nullptr) error->all(FLERR, "Did not find mdr model");
+  //model = models_list[0];
+  //class GranSubModNormalMDR* norm_model = dynamic_cast<GranSubModNormalMDR *>(model->normal_model);
+
+  //std::cout << "Preforce was called" << std::endl;
 
   // assign correct value to initially non-zero MDR particle history variables 
   int tmp1, tmp2;
@@ -88,7 +95,7 @@ void FixMDRradiusUpdate::pre_force(int)
   int nlocal = atom->nlocal;
 
   for (int i = 0; i < nlocal; i++) { 
-    if (history_setup_flag[i] == 0.0) {
+    if (history_setup_flag[i] < 1e-16) {
       Ro[i] = radius[i];
       Vgeo[i] = 4.0/3.0*M_PI*pow(Ro[i],3.0);
       Velas[i] = 4.0/3.0*M_PI*pow(Ro[i],3.0);

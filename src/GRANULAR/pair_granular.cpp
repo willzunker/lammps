@@ -36,6 +36,7 @@
 #include "neigh_list.h"
 #include "neighbor.h"
 #include "update.h"
+#include "gran_sub_mod_normal.h"
 
 #include <cstring>
 #include <iostream>
@@ -80,6 +81,8 @@ PairGranular::PairGranular(LAMMPS *lmp) : Pair(lmp)
 
   fix_history = nullptr;
   fix_dummy = dynamic_cast<FixDummy *>(modify->add_fix("NEIGH_HISTORY_GRANULAR_DUMMY all DUMMY"));
+
+  fix_flag = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -205,6 +208,8 @@ void PairGranular::compute(int eflag, int vflag)
       model->radj = radius[j];
       model->i = i;
       model->j = j;
+      model->itype = itype;
+      model->jtype = jtype;
 
       /*
       if (radius[i] < 0.00065 || radius[j] < 0.00065) {
@@ -502,9 +507,9 @@ void PairGranular::init_style()
   } 
   */
 
-  std::cout << "MDR history variables have been initialized" << std::endl;
+ if (model->normal_model->name == "mdr") {
 
- //if (model == mdr) {
+  std::cout << "MDR history variables have been initialized" << std::endl;
 
   // FOR MDR CONTACT MODEL
   //Store persistent per atom quantities
@@ -532,6 +537,8 @@ void PairGranular::init_style()
     index_sigmayy = atom->find_custom("sigmayy",tmp1,tmp2);                       // yy-component of the stress tensor, not necessary for force calculation  
     index_sigmazz = atom->find_custom("sigmazz",tmp1,tmp2);                       // zz-component of the stress tensor, not necessary for force calculation   
 
+     std::cout << "MDR history variables have been initialized 2" << std::endl;
+
     //index_volSums = atom->find_custom("volSums",tmp1,tmp2);
 
     // Initiate MDR radius update fix
@@ -550,7 +557,7 @@ void PairGranular::init_style()
 
     fix_flag = 1;
   }  
- //}
+ }
 
   // check for FixFreeze and set freeze_group_bit
 

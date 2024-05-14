@@ -1,0 +1,101 @@
+############################### SIMULATION SETTINGS ###################################################
+
+units		   si
+atom_style	   sphere
+atom_modify	   first big
+boundary       f f f 
+newton off
+read_data	   spheres.data
+timestep = 1e-4
+
+variable die_xp equal 4e-3
+variable die_xn equal 4e-3
+variable die_yp equal 4e-3
+variable die_yn equal 4e-3
+variable die_zp equal 1e-2
+variable die_zn equal 0.0
+
+variable       density_small equal 1000 #Number density
+region         box block -${die_xn} ${die_xp} -${die_yn} ${die_yp} ${die_zn} ${die_xp}
+variable       vol equal 2*${die_xp}+2*${die_yp}+${die_zp}
+create_atoms   2 random $(v_density_small*v_vol) 13214 box
+
+atom_modify    first big
+group		   big type 1
+group		   small type 2
+set		       group small density 1560e-3 
+set            group small diameter 0.5e-3/20
+
+neighbor       0.3 multi
+comm_modify	    mode multi group big vel yes
+
+ 
+variable atomRadius equal 1.0
+variable YoungsModulus equal 1e4
+variable PoissonsRatio equal 0.3
+variable YieldStress equal 1e3
+variable SurfaceEnergy equal 0.0
+variable SurfaceEnergyWall equal 0.0
+variable psi_b equal 0.08
+variable CoR equal 0.5
+variable kt equal 2/7*${YoungsModulus}*${atomRadius}
+variable xgammat equal 0.0
+variable mu_s equal 0.7
+variable mu_roll equal 0.55
+variable k_roll equal 2.25*${mu_roll}*${mu_roll}*${YoungsModulus}*${atomRadius}
+variable gamma_roll equal 0.0
+
+variable atom_contact_string string "mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEnergy} ${psi_b} ${CoR} damping none tangential linear_history ${kt} ${xgammat} ${mu_s} rolling sds ${k_roll} ${gamma_roll} ${mu_roll}" 
+variable wall_contact_string string "granular mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEnergyWall} ${psi_b} ${CoR} damping none tangential linear_history ${kt} ${xgammat} ${mu_s} rolling sds ${k_roll} ${gamma_roll} ${mu_roll}"
+
+
+pair_style	   granular 
+pair_coeff	   1 1 ${atom_contact_string}
+pair_coeff	   2 2 ${atom_contact_string} 
+pair_coeff	   1 2 ${atom_contact_string} 
+
+neigh_modify   one 10000
+delete_atoms   overlap 0.6 small big
+
+velocity	    small create 0.001 87287 loop geom
+
+neighbor	    0.3 multi
+neigh_modify	delay 0 every 1 check yes 
+neigh_modify	include big
+
+pair_style	   granular 
+pair_coeff	   1 1 ${atom_contact_string} cutoff 3.5
+pair_coeff	   2 2 ${atom_contact_string} cutoff 0.0
+pair_coeff	   1 2 ${atom_contact_string} cutoff 0.0 
+
+timestep	    1e-3
+
+variable        wall_lo equal 0 
+variable        wall_hi equal 10 
+fix             1 big nve/sphere
+
+fix	            2 small srd 200 big 300e18 0.1 3122 &
+		        cubic warn 0.0001 shift yes 49829 &
+		        overlap yes collision noslip tstat yes bounce 10 inside ignore
+fix		        3 all wall/srd xlo 0 xhi 10 ylo 0 yhi 10 zlo v_wall_lo zhi v_wall_hi
+
+variable        disp equal 0
+region          casing block 0 10 0 10 0 10 side in
+region          piston block 0 10 0 10 10 INF side out move NULL NULL v_disp
+fix             4a big wall/gran/region ${wall_contact_string} region casing
+fix             4b big wall/gran/region ${wall_contact_string} region piston
+fix             5 big gravity 9.81 vector 0 0 -1
+
+thermo		    100
+thermo_style	custom step atoms ke press
+thermo_modify   lost ignore
+dump            1 all custom 100 airTableting.dump id type mass diameter x y z vx vy vz
+
+run		        1000
+
+variable        compression_steps equal 10000
+variable        delta_wall equal 0.7*($(zhi)-$(zlo))
+variable        disp equal -elapsed/${compression_steps}*${delta_wall}
+variable        wall_hi equal 10+v_disp
+run             ${compression_steps}
+

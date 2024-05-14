@@ -1,0 +1,38 @@
+% INPUT:
+%   nWant:  Number of spheres
+%   Width:  Dimension of 3d box as [1 x 3] double vector
+%   Radius: Radius of spheres
+% OUTPUT:
+%   P:      [nWant x 3] matrix, centers
+
+function placeSpheres(boxSize, N_goal, R_mean, R_std)
+sphereCenters = zeros(N_goal, 3);
+sphereRadii = normrnd(R_mean,R_std,N_goal,1);
+placeBox = boxSize - 2*R_mean; % Avoid interesction with borders
+i = 1;                  % Security break to avoid infinite loop
+N_cur = 0;
+while N_cur < N_goal && i < 3e6
+    newSphereCenter = rand(1, 3) .* placeBox + sphereRadii(N_cur+1);
+    if N_cur == 0
+        N_cur = N_cur + 1;  % Append this point
+        sphereCenters(N_cur, :) = newSphereCenter;
+        continue
+    end
+    Dist2 = sum((sphereCenters(1:N_cur, :) - newSphereCenter) .^ 2, 2);
+    for j = 1 : length(Dist2)
+        if Dist2(j) <= (sphereRadii(N_cur+1) + sphereRadii(j))
+            break
+        end
+    end
+    N_cur = N_cur + 1;  % Append this point
+    sphereCenters(N_cur, :) = newSphereCenter;
+
+    i = i + 1;
+end
+
+if N_cur < N_goal
+    error('Cannot find wanted number of points in %d iterations.', i)
+end
+
+plotSpheres(sphereCenters, sphereRadii)
+end

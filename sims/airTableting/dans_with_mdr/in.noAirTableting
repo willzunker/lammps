@@ -1,0 +1,72 @@
+# Compaction of spheres with SRD as gas
+units		   si
+atom_style	   sphere
+atom_modify	   first big
+boundary       f f f 
+read_data	   spheres.data
+
+atom_modify    first big
+group		   big type 1
+
+neighbor       0.3 multi
+comm_modify	    mode multi group big vel yes
+
+set            group big density 1
+
+# mdr = E, nu, Y, gamma, psi_b, CoR
+# linear_history = k_t, x_gamma,t, mu_s 
+variable atomRadius equal 1.0
+variable YoungsModulus equal 1e4
+variable PoissonsRatio equal 0.3
+variable YieldStress equal 1e3
+variable SurfaceEnergy equal 0.0
+variable SurfaceEnergyWall equal 0.0
+variable psi_b equal 0.08
+variable CoR equal 0.5
+variable kt equal 2/7*${YoungsModulus}*${atomRadius}
+variable xgammat equal 0.0
+variable mu_s equal 0.7
+variable mu_roll equal 0.55
+variable k_roll equal 2.25*${mu_roll}*${mu_roll}*${YoungsModulus}*${atomRadius}
+variable gamma_roll equal 0.0
+
+variable atom_contact_string string "mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEnergy} ${psi_b} ${CoR} damping none tangential linear_history ${kt} ${xgammat} ${mu_s} rolling sds ${k_roll} ${gamma_roll} ${mu_roll}" 
+variable wall_contact_string string "granular mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEnergyWall} ${psi_b} ${CoR} damping none tangential linear_history ${kt} ${xgammat} ${mu_s} rolling sds ${k_roll} ${gamma_roll} ${mu_roll}"
+ 
+pair_style	   granular 
+pair_coeff	   1 1 ${atom_contact_string}
+pair_coeff	   2 2 ${atom_contact_string} 
+pair_coeff	   1 2 ${atom_contact_string} 
+
+neighbor	    0.3 multi
+neigh_modify	delay 0 every 1 check yes 
+neigh_modify	include big
+
+# Set up fix srd, run short equilibration
+timestep	    1e-3
+
+ 
+fix             1 big nve/sphere
+
+variable        disp equal 0
+region          casing block 0 10 0 10 0 10 side in
+region          piston block 0 10 0 10 10 INF side out move NULL NULL v_disp
+fix             4a big wall/gran/region ${wall_contact_string} region casing
+fix             4b big wall/gran/region ${wall_contact_string} region piston
+fix             5 big gravity 9.81 vector 0 0 -1
+
+thermo		    100
+thermo_style	custom step atoms ke press
+thermo_modify   lost ignore
+dump            1 all custom 200 noAirTableting.dump id type mass diameter x y z vx vy vz
+
+#Allow particles to settle
+run		        1000
+
+##Move piston down
+variable        compression_steps equal 10000
+variable        delta_wall equal 0.7*($(zhi)-$(zlo))
+variable        disp equal -elapsed/${compression_steps}*${delta_wall}
+#fix print1 all print 1 "${disp}" file disp.csv screen no
+run             ${compression_steps}
+

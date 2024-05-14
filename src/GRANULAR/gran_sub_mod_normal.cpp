@@ -116,7 +116,6 @@ void GranSubModNormalHooke::coeffs_to_local()
 
 double GranSubModNormalHooke::calculate_forces()
 {
-  std::cout << "F Hooke is: " << k * gm->delta << ", " << gm->i << ", " << gm->j << ", " << gm->radi << std::endl;
   return k * gm->delta;
 }
 
@@ -457,6 +456,8 @@ double GranSubModNormalMDR::calculate_forces()
   double delta = gm->delta;               // apparent overlap
   if (gm->contact_type == PAIR) delta = gm->delta/2.0; // half displacement to imagine interaction with rigid flat 
   
+  //std::cout << "Contact model has been entered " << gm->contact_type << ", " << PAIR << ", " << WALL << ", " << WALLREGION << ", " << gm->itype << ", " << gm->jtype << ", " << gm->delta << std::endl; 
+
   // initialize indexing in history array of different constact history variables 
   const int delta_offset_0 = 0;           // apparent overlap 
   const int delta_offset_1 = 1;           
@@ -501,6 +502,7 @@ double GranSubModNormalMDR::calculate_forces()
   int index_sigmayy = atom->find_custom("sigmayy",tmp1,tmp2);             // yy-component of the stress tensor, not necessary for force calculation  
   int index_sigmazz = atom->find_custom("sigmazz",tmp1,tmp2);             // zz-component of the stress tensor, not necessary for force calculation   
   double * Rinitial = atom->dvector[index_Ro];
+  //std::cout << "It could assign Rinitial" << std::endl;
   double * Vgeo = atom->dvector[index_Vgeo];
   double * Velas = atom->dvector[index_Velas];
   double * Vcaps = atom->dvector[index_Vcaps];
@@ -533,13 +535,18 @@ double GranSubModNormalMDR::calculate_forces()
     double * Ac_offset; 
     double * eps_bar_offset; 
     double * penalty_offset;
-     
+
     if (contactSide == 0) {
       if (gm->contact_type == PAIR) {
-        gm->i = j_true;
-        gm->j = i_true;
-        gm->radi = radj_true;
-        gm->radj = radi_true;
+        gm->i = std::max(i_true,j_true);
+        gm->j = std::min(i_true,j_true);
+        if (gm->i == i_true) {
+          gm->radi = radi_true;
+          gm->radj = radj_true;
+        } else {
+          gm->radi = radj_true;
+          gm->radj = radi_true;
+        }
       }
       delta_offset = & history[delta_offset_0];
       deltao_offset = & history[deltao_offset_0];
@@ -554,10 +561,15 @@ double GranSubModNormalMDR::calculate_forces()
       eps_bar_offset = & history[eps_bar_offset_0];
     } else {
       if (gm->contact_type != PAIR) break; // contact with particle-wall requires only one evaluation
-      gm->i = i_true;
-      gm->j = j_true;
-      gm->radi = radi_true;
-      gm->radj = radj_true;
+      gm->i = std::min(i_true,j_true);
+      gm->j = std::max(i_true,j_true);
+      if (gm->i == i_true) {
+        gm->radi = radi_true;
+        gm->radj = radj_true;
+      } else {
+        gm->radi = radj_true;
+        gm->radj = radi_true;
+      }
       delta_offset = & history[delta_offset_1];
       deltao_offset = & history[deltao_offset_1];
       delta_MDR_offset = & history[delta_MDR_offset_1];
@@ -782,6 +794,11 @@ double GranSubModNormalMDR::calculate_forces()
 
   }
 
+  gm->i = i_true;
+  gm->j = j_true;
+  gm->radi = radi_true;
+  gm->radj = radj_true;
+
   double * penalty_offset = & history[penalty_offset_];
   const double pij = *penalty_offset;
   const double wij = std::max(1.0-pij,0.0);
@@ -792,7 +809,7 @@ double GranSubModNormalMDR::calculate_forces()
   // wall force magnifier
   double * deltao_offset = & history[deltao_offset_0];
   const double wallForceMagnifer = std::exp(10.0*(*deltao_offset)/Rinitial[gm->i] - 9.0) + 1.0;
-  //const double wallForceMagnifer = 0.0;
+  //const double wallForceMagnifer = 1.0;
 
   // assign final force
   (gm->contact_type != PAIR) ? F = wij*F0*wallForceMagnifer : F = wij*(F0 + F1)/2;

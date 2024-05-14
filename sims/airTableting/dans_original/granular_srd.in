@@ -1,0 +1,91 @@
+# Compaction of spheres with SRD as gas
+units		   lj
+atom_style	   sphere
+atom_modify	   first big
+boundary       f f f 
+read_data	   spheres.data
+
+# Add small particles randomly
+# Number density and MPCD particle mass determine pressure as per ideal gas law
+# Note the density here does not account for the presence of spheres
+#change_box     all x final -3 13 y final -3 13 z final -3 13 
+variable       density_small equal 1000 #Number density
+region         box block 0 10 0 10 0 10
+variable       vol equal 1000
+create_atoms   2 random $(v_density_small*v_vol) 13214 box
+
+atom_modify    first big
+group		   big type 1
+group		   small type 2
+set		       group small mass 0.001 #0.1% of sphere mass to keep fluctuations minimal
+set            group small diameter 0.05
+
+neighbor       0.3 multi
+comm_modify	    mode multi group big vel yes
+
+# delete overlaps
+# must set 1-2 cutoff to non-zero value
+# type 2 particles = MPCD particles
+# pair_coeff for 2 2 and 1 2 is defined for MPCD particles so that they are treated like granular particles so that delete_atoms can be used, then later on they will be reset 
+pair_style	   granular 
+pair_coeff	   1 1 hooke 1e3 1e2 tangential linear_nohistory 1.0 0.4 
+pair_coeff	   2 2 hooke 1e3 1e2 tangential linear_nohistory 1.0 0.4 
+pair_coeff	   1 2 hooke 1e3 1e2 tangential linear_nohistory 1.0 0.4 
+
+neigh_modify   one 10000
+delete_atoms   overlap 0.6 small big
+
+# SRD run
+velocity	    small create 0.001 87287 loop geom
+
+neighbor	    0.3 multi
+neigh_modify	delay 0 every 1 check yes 
+neigh_modify	include big
+
+# Reset pairwise interactions, no interactions with small particles
+
+#pair_style		lj/cut 3.5
+#pair_coeff		1 1 1.0 0.3
+#pair_coeff		2 2 0.0 1.0 0.0 
+#pair_coeff		1 2 0.0 1.0 0.0
+
+pair_style	   granular 
+pair_coeff	   1 1 hooke 1e4 1e2 tangential linear_nohistory 1.0 0.4 cutoff 3.5
+pair_coeff	   2 2 hooke 1e4 1e2 tangential linear_nohistory 1.0 0.4 cutoff 0.0
+pair_coeff	   1 2 hooke 1e4 1e2 tangential linear_nohistory 1.0 0.4 cutoff 0.0 # cutoff 0.0 will remove MPCD particles from neighbor lists
+
+# Set up fix srd, run short equilibration
+timestep	    0.001
+
+variable        wall_lo equal 0 
+variable        wall_hi equal 10 
+fix             1 big nve/sphere
+
+# define grid size, temperature, and other properties of srd
+fix	            2 small srd 20 big 0.001 0.1 3122 &
+		        cubic warn 0.0001 shift yes 49829 &
+		        overlap yes collision noslip tstat yes bounce 10 inside ignore
+fix		        3 all wall/srd xlo 0 xhi 10 ylo 0 yhi 10 zlo v_wall_lo zhi v_wall_hi
+
+variable        disp equal 0
+region          casing block 0 10 0 10 0 10 side in
+region          piston block 0 10 0 10 10 INF side out move NULL NULL v_disp
+fix             4a big wall/gran/region granular hooke 1e3 1e2 tangential linear_nohistory 1.0 0.4 region casing
+fix             4b big wall/gran/region granular hooke 1e3 1e2 tangential linear_nohistory 1.0 0.4 region piston
+fix             5 big gravity 1.0 vector 0 0 -1
+
+thermo		    100
+thermo_style	custom step atoms ke press
+thermo_modify   lost ignore
+dump            1 all custom 100 spheres_mpcd.dump id type mass diameter x y z vx vy vz
+
+#Allow particles to settle
+run		        10000
+
+##Move piston down
+variable        compression_steps equal 10000
+variable        delta_wall equal 0.6*($(zhi)-$(zlo))
+variable        disp equal -elapsed/${compression_steps}*${delta_wall}
+variable        wall_hi equal 10+v_disp
+run             ${compression_steps}
+

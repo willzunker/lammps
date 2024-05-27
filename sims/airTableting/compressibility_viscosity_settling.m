@@ -1,0 +1,79 @@
+clear all
+close all
+clc
+
+%% mean free path
+
+N_reset = 1; % check
+dt = 1.4926e-07; % check
+dt_srd = N_reset*dt;
+kb = 1.380649e-23;
+T_mpcd = 9.4e15; % check
+R_big = 0.4e-3; 
+rho_big = 1560;
+m_big = 4/3*pi*R_big^3*rho_big;
+m_mpcd = m_big*1e-3; % check
+lambda = dt_srd*sqrt(kb*T_mpcd/m_mpcd);
+
+fprintf('lambda is: %f\n', lambda);
+
+N_mpcd = 1e5; % check
+
+ideal_constant_mpcd = N_mpcd*kb*T_mpcd;
+
+%% pV = nRT
+
+p_air = 101325;
+V_unit = 1;
+R = 8.314;
+T_air = 293;
+
+n_unit = p_air*V_unit/(R*T_air);
+V_die = 8e-3*8e-3*1e-2;
+n_air = n_unit*V_die;
+
+ideal_constant_air = n_air*R*T_air;
+
+fprintf('If two values are listed it represents: air, mpcd\n');
+
+fprintf('ideal gas constant: %f, %f\n', ideal_constant_air, ideal_constant_mpcd);
+
+
+%% settling velocity
+
+m_air = 1.29*V_die;
+m_mpcd_all = m_mpcd*N_mpcd;
+rho_mpcd = m_mpcd_all/V_die;
+
+fprintf('Big to mpcd density ratio: %f\n', rho_big/rho_mpcd);
+
+rho_air = 1.29;
+R_avicel = 50e-6;
+g = 9.81;
+nu_air = 1.48e-5;
+
+% Fg = 4*pi*(rho_m-rho_w)*g*R^3/3;
+% Fd = 6*pi*nu*rho_w*R*v;
+
+v_avicel = 2/9*rho_big*g*R_avicel^2/(nu_air*rho_air);
+v_big_air = 2/9*rho_big*g*R_big^2/(nu_air*rho_air);
+g_mpcd = 25*g; % check
+v_big_mpcd = 2/9*rho_big*g_mpcd*R_big^2/(nu_air*rho_mpcd);
+
+fprintf('settling velocity: %f, %f\n', v_big_air, v_big_mpcd);
+
+%% viscocity
+a = 2*R_big/4; % check
+M = N_mpcd/(V_die/a^3);
+nu_mpcd = a^2/(18*dt_srd)*(1-(1-exp(-M))./M) + lambda^2*(M+2)./(4*dt_srd*(M-1));
+
+fprintf('viscosity: %f, %f\n', nu_air, nu_mpcd);
+
+fprintf('M: %f\n', M);
+
+syms dt_ m_
+
+nu_air = 1e-3;
+
+dt_required = vpasolve( a^2/(18*dt_)*(1-(1-exp(-M))/M) + kb*T_mpcd*dt_*(M+2)/(4*m_mpcd*(M-1)) == nu_air, dt_, 1 )
+m_required = vpasolve( a^2/(18*dt_srd)*(1-(1-exp(-M))/M) + kb*T_mpcd*dt_srd*(M+2)/(4*m_*(M-1)) == nu_air, m_, 1 )

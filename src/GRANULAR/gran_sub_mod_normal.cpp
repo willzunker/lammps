@@ -783,6 +783,11 @@ double GranSubModNormalMDR::calculate_forces()
     if(delta_MDR == deltamax_MDR && *Yflag_offset > 0.0 && F_MDR > 0.0){
       const double Vo = (4.0/3.0)*M_PI*pow(Ro,3.0);
       dRnumerator[i] += -Vo*(eps_bar_contact - *eps_bar_offset) - wij*M_PI*ddeltao*( 2.0*deltao*Ro - pow(deltao,2.0) + pow(R,2.0) - pow(Ro,2.0) );
+
+      if (i == 12) {
+        std::cout << j << ", " << -Vo*(eps_bar_contact - *eps_bar_offset) - wij*M_PI*ddeltao*( 2.0*deltao*Ro - pow(deltao,2.0) + pow(R,2.0) - pow(Ro,2.0) ) << ", " << -Vo*(eps_bar_contact - *eps_bar_offset) << ", " << wij*M_PI*ddeltao*( 2.0*deltao*Ro - pow(deltao,2.0) + pow(R,2.0) - pow(Ro,2.0) ) << std::endl;
+      }
+
       dRdenominator[i] += wij*2.0*M_PI*R*(deltao + R - Ro);
     }
     *eps_bar_offset = eps_bar_contact;

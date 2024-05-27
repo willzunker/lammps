@@ -5,34 +5,43 @@ atom_modify map array
 comm_modify vel yes
 units si
 newton off
-neighbor      4e-3 bin
-neigh_modify delay 0 
-timestep 1e-6 #timestep 0.5e-7
+neighbor      2e-3 bin
+neigh_modify every 5 delay 20 check yes
+timestep 0.5e-7
 
 ######################### SIMULATION BOUNDING BOX, INTEGRATION, AND, GRAVITY ###########################
 
 boundary f f f
-read_data spheres.data
+region simBox block -0.05 0.05 -0.05 0.05 -0.05 0.05 units box
+create_box 1 simBox
 
 ######################################### ADD DIE AND ATOM PARAMETERIZATION ##############################################
 
-variable atomRadius              equal 1e-3 #variable atomRadius              equal 0.5e-3
+variable numberOfAtoms           equal 275
+variable atomRadius              equal 0.5e-3
 variable atomDiameter            equal 2*${atomRadius}
+variable atomDiameterLow         equal 0.9*${atomDiameter}
+variable atomDiameterHigh        equal 1.1*${atomDiameter}
 variable atomDensity             equal 1560 
 variable dieRadius               equal 4e-3
 variable dieHeight               equal 1e-2
+variable insertionRadius         equal ${dieRadius}-1.5*${atomRadius}
+variable insertionLowerBound     equal ${dieHeight}*0.6 #1.5*${atomRadius}
+variable insertionUpperBound     equal ${dieHeight}-1.5*${atomRadius}
+
+region  atomInsertionRegion cylinder z 0 0 ${insertionRadius} ${insertionLowerBound} ${insertionUpperBound} side in units box
 
 ########################### PARTICLE MATERIAL PROPERTIES AND FORCE MODEL ###############################
 
 pair_style granular
 # mdr = E, nu, Y, gamma, psi_b, CoR
 # linear_history = k_t, x_gamma,t, mu_s 
-variable YoungsModulus equal 1e8 #variable YoungsModulus equal 1e10
+variable YoungsModulus equal 1e10
 variable PoissonsRatio equal 0.3
-variable YieldStress equal 1.7e6 #variable YieldStress equal 1.7e8
-variable SurfaceEnergy equal 0.0 #variable SurfaceEnergy equal 450
+variable YieldStress equal 1.7e8
+variable SurfaceEnergy equal 450
 variable SurfaceEnergyWall equal 0.0
-variable psi_b equal 0.08
+variable psi_b equal 0.6
 variable CoR equal 0.5
 variable kt equal 2/7*${YoungsModulus}*${atomRadius}
 variable xgammat equal 0.0
@@ -46,10 +55,10 @@ pair_coeff * * mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEne
 #pair_coeff * * mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEnergy} ${psi_b} ${CoR} tangential linear_nohistory 0.0 0.0 damping none
 
 ##################################### DEFINE RUN CONTROL VARIBLES  #############################################
-variable settlingStepsCoeff equal 0.02
+variable settlingStepsCoeff equal 0.15
 variable settlingSteps equal round(${settlingStepsCoeff}/dt)
 variable zInitalPunchPosition equal ${dieHeight} 
-variable zFinalPunchPosition  equal ${dieHeight}*0.3 #variable zFinalPunchPosition  equal ${dieHeight}*0.38
+variable zFinalPunchPosition  equal ${dieHeight}*0.38
 variable compressionStartStep equal ${settlingSteps}
 variable compressionEndStep equal round((${settlingStepsCoeff}+0.1)/dt)
 variable ejectionEndStep equal round((${settlingStepsCoeff}+0.15)/dt)
@@ -89,19 +98,20 @@ fix print1 all print 1 "${zPunchDisplacement} ${avgPunchForce}" file upperPunchD
 
 fix 1 all nve/sphere
 fix grav all gravity 9.81 vector 0 0 -1
+fix ins1 all pour ${numberOfAtoms} 1 19985583 region atomInsertionRegion diam range ${atomDiameterLow} ${atomDiameterHigh} dens ${atomDensity} ${atomDensity} vol 0.3 4000
 
 ######################################## SCREEN OUTPUT  ####################################################
 
 compute       1 all erotate/sphere
 thermo_style  custom dt step atoms ke vol
-thermo        1
+thermo        1000
 thermo_modify lost ignore norm no
 
 ##################################### SET UP DUMP OUTPUTS  ####################################################
 
 compute ke all ke/atom
-variable output_rate equal 1 #variable output_rate equal round(1e-3/dt)
-dump dumpParticles all custom ${output_rate} avicelTableting.dump id type mass diameter x y z vx vy vz fx fy fz c_ke
+variable output_rate equal round(1e-3/dt)
+dump dumpParticles all vtk ${output_rate} post/particles_*.vtk id x y z fx fy fz vx vy vz c_ke radius
 #dump 1 all custom 1 uniaxialCompression id type f_plane_yz_neg[*]
 
 #variable az_upperPunch atom f_upperPunch[7]
@@ -111,7 +121,5 @@ dump dumpParticles all custom ${output_rate} avicelTableting.dump id type mass d
 
 ######################################### BEGIN RUN  ##########################################################
 
-variable shortenRunStep equal ${compressionEndStep}*0.75
-
-run 55384 
+run ${compressionEndStep} 
 

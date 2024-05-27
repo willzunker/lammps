@@ -47,7 +47,7 @@ variable die_zh equal  1e-2
 variable die_zl equal  0.0
 
 variable num_mpcd equal 500000
-variable diameter_mcpd equal 2*${radius_sphere_punch}/50
+variable diameter_mcpd equal 2*${radius_sphere_punch}/20
 variable velocity_mpcd equal ${radius_powder}/(5*dt)
 variable mass_mpcd equal 4/3*PI*${radius_sphere_punch}^3*${density_powder}*1e-3
 
@@ -138,9 +138,10 @@ fix             5 powder gravity 245.25 vector 0 0 -1
 compute avgPunchForce all reduce sum f_4b[4]
 variable avgPunchForce equal c_avgPunchForce
 
-fix print1 all print 1 "${disp_upper} ${avgPunchForce}" file force_disp_with_air.csv screen no 
+fix print1 all print 1 "${disp_upper} ${avgPunchForce}" file force_disp_with_air_slow.csv screen no 
 
 variable        compression_steps equal 50000
+variable 		compression_steps_slow equal 5*${compression_steps}
 variable        upper_punch_stroke equal 0.62*(${die_zh}-${die_zl})
 variable 		disp0 equal 0.0
 variable 		vel0 equal 0.0
@@ -151,7 +152,7 @@ fix				6 sphere_punch move variable v_disp0 v_disp0 v_disp_upper v_vel0 v_vel0 v
 thermo		    100
 thermo_style	custom step atoms ke press
 thermo_modify   lost ignore
-dump            1 all custom 1000 square_tablet_with_air.dump id type mass diameter x y z vx vy vz
+dump            1 all custom 1000 square_tablet_with_air_slow.dump id type mass diameter x y z vx vy vz
 
 
 ##### SETTLING #####
@@ -160,9 +161,9 @@ run		        10000
 
 ##### Compression #####
 
-variable 		velz equal -1/${compression_steps}*${upper_punch_stroke}/dt
-variable        disp_upper equal -elapsed/${compression_steps}*${upper_punch_stroke}
-run             ${compression_steps}
+variable 		velz equal -1/${compression_steps_slow}*${upper_punch_stroke}/dt
+variable        disp_upper equal -elapsed/${compression_steps_slow}*${upper_punch_stroke}
+run             ${compression_steps_slow}
 
 ##### RELEASE #####
 

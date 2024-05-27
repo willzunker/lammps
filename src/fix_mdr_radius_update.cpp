@@ -180,7 +180,15 @@ void FixMDRradiusUpdate::end_of_step()
       radius[i] += dR;
     }
 
-    //std::cout << i << ", " << radius[i] << " | " << psi_b[i] << ", " << psi[i] << " | " << Acon1[i] << ", " << Atot[i] << std::endl;
+      if (dR > 3e-5) {
+        std::cout << "big dR change" << std::endl;
+      }
+   
+      std::cout << i << ", " << radius[i] << ", " << dR << ", " << dRnumerator[i] << ", " << dRdenominator[i] << ", " << dRdenominator[i] - 4.0*M_PI*pow(R,2.0)  << std::endl;
+      
+      
+      //std::cout << i << ", " << radius[i] << " | " << psi_b[i] << ", " << psi[i] << " | " << Acon1[i] << ", " << Atot[i] << std::endl;
+    
 
     Velas[i] = Vo*(1.0 + eps_bar[i]);
     Vcaps[i] = 0.0;

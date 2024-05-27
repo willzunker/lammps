@@ -18,17 +18,17 @@ variable radius_sphere_punch equal 0.4e-3
 
 variable radius_powder equal 0.5e-3
 variable density_powder equal 1560
-variable YoungsModulus equal 2e8
+variable YoungsModulus equal 1e6
 variable PoissonsRatio equal 0.3
-variable YieldStress equal 1e6
-variable SurfaceEnergy equal 10
+variable YieldStress equal 2e4
+variable SurfaceEnergy equal 100
 variable SurfaceEnergyWall equal 0.0
-variable psi_b equal 0.6
+variable psi_b equal 0.5
 variable CoR equal 0.5
 variable kt equal 2/7*${YoungsModulus}*${radius_powder}
 variable xgammat equal 0.0
 variable mu_s equal 0.7
-variable mu_s_wall equal 0.7
+variable mu_s_wall equal 0.1
 variable mu_roll equal 0.55
 variable k_roll equal 2.25*${mu_roll}*${mu_roll}*${YoungsModulus}*${radius_powder}
 variable gamma_roll equal 0.0
@@ -46,8 +46,8 @@ variable die_yl equal -4e-3
 variable die_zh equal  1e-2
 variable die_zl equal  0.0
 
-variable num_mpcd equal 500000
-variable diameter_mcpd equal 2*${radius_sphere_punch}/50
+variable num_mpcd equal 50000
+variable diameter_mcpd equal 2*${radius_sphere_punch}/20
 variable velocity_mpcd equal ${radius_powder}/(5*dt)
 variable mass_mpcd equal 4/3*PI*${radius_sphere_punch}^3*${density_powder}*1e-3
 
@@ -108,8 +108,8 @@ fix             1a powder nve/sphere
 variable        mpcd_wall_zl equal ${die_zl} 
 variable        mpcd_wall_zh equal ${die_zh} 
 variable 		mpcd_grid_size equal 2*${radius_sphere_punch}/4
-variable 		temp_mpcd equal 9.4e15
-variable 		N_reset equal 5
+variable 		temp_mpcd equal 9.4e13
+variable 		N_reset equal 20
 fix	            2a small srd ${N_reset} big ${temp_mpcd} ${mpcd_grid_size} 3122 &
 		        cubic warn 0.0001 shift yes 49829 &
 		        overlap yes collision noslip tstat yes bounce 10 inside ignore
@@ -131,17 +131,17 @@ fix 			4a3 powder wall/gran/region ${wall_contact_string} region die3
 fix 			4a4 powder wall/gran/region ${wall_contact_string} region die4
 fix             4b powder wall/gran/region ${wall_contact_string} region upper_punch contacts 
 fix             4c powder wall/gran/region ${wall_contact_string} region lower_punch contacts
-fix             5 powder gravity 245.25 vector 0 0 -1
+fix             5 powder gravity 9.81 vector 0 0 -1
 
 ######################################### RUN SIMULATION ##########################################
 
 compute avgPunchForce all reduce sum f_4b[4]
 variable avgPunchForce equal c_avgPunchForce
 
-fix print1 all print 1 "${disp_upper} ${avgPunchForce}" file force_disp_with_air.csv screen no 
+fix print1 all print 1 "${disp_upper} ${avgPunchForce}" file force_disp_some_air.csv screen no 
 
 variable        compression_steps equal 50000
-variable        upper_punch_stroke equal 0.62*(${die_zh}-${die_zl})
+variable        upper_punch_stroke equal 0.64*(${die_zh}-${die_zl})
 variable 		disp0 equal 0.0
 variable 		vel0 equal 0.0
 variable 		velz equal 0.0
@@ -151,12 +151,12 @@ fix				6 sphere_punch move variable v_disp0 v_disp0 v_disp_upper v_vel0 v_vel0 v
 thermo		    100
 thermo_style	custom step atoms ke press
 thermo_modify   lost ignore
-dump            1 all custom 1000 square_tablet_with_air.dump id type mass diameter x y z vx vy vz
+dump            1 all custom 1000 square_tablet_some_air.dump id type mass diameter x y z vx vy vz
 
 
 ##### SETTLING #####
 
-run		        10000
+run		        50000
 
 ##### Compression #####
 

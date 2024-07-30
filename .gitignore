@@ -13,6 +13,8 @@
 *.dll
 *.pyc
 *.whl
+*.dump
+*.csv
 a.out
 __pycache__
 

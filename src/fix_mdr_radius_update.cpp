@@ -82,15 +82,25 @@ void FixMDRradiusUpdate::pre_force(int)
   int index_Atot = atom->find_custom("Atot",tmp1,tmp2);                   
   int index_psi = atom->find_custom("psi",tmp1,tmp2);
   int index_psi_b = atom->find_custom("psi_b",tmp1,tmp2);
-  int index_history_setup_flag = atom->find_custom("history_setup_flag",tmp1,tmp2);         
+  int index_sigmaxx = atom->find_custom("sigmaxx",tmp1,tmp2);             
+  int index_sigmayy = atom->find_custom("sigmayy",tmp1,tmp2);               
+  int index_sigmazz = atom->find_custom("sigmazz",tmp1,tmp2);   
+  int index_history_setup_flag = atom->find_custom("history_setup_flag",tmp1,tmp2); 
+  int index_contacts = atom->find_custom("contacts",tmp1,tmp2);    
+  int index_adhesive_length = atom->find_custom("adhesive_length",tmp1,tmp2);         
   double * Ro = atom->dvector[index_Ro];
   double * Vgeo = atom->dvector[index_Vgeo];
   double * Velas = atom->dvector[index_Velas];
   double * Atot = atom->dvector[index_Atot];
   double * psi = atom->dvector[index_psi];
   double * psi_b = atom->dvector[index_psi_b];
+  double * sigmaxx = atom->dvector[index_sigmaxx];
+  double * sigmayy = atom->dvector[index_sigmayy];
+  double * sigmazz = atom->dvector[index_sigmazz];
   double * history_setup_flag = atom->dvector[index_history_setup_flag];
-
+  double * contacts = atom->dvector[index_contacts];
+  double * adhesive_length = atom->dvector[index_adhesive_length];
+  
   double *radius = atom->radius;
   int nlocal = atom->nlocal;
 
@@ -104,6 +114,11 @@ void FixMDRradiusUpdate::pre_force(int)
       psi_b[i] = norm_model->psi_b;
       history_setup_flag[i] = 1.0;
     }
+    sigmaxx[i] = 0.0;
+    sigmayy[i] = 0.0;
+    sigmazz[i] = 0.0;
+    contacts[i] = 0.0;
+    adhesive_length[i] = 0.0;
   }
 }
 
@@ -128,9 +143,11 @@ void FixMDRradiusUpdate::end_of_step()
   int index_ddelta_bar = atom->find_custom("ddelta_bar",tmp1,tmp2);       
   int index_psi = atom->find_custom("psi",tmp1,tmp2);
   int index_psi_b = atom->find_custom("psi_b",tmp1,tmp2); 
-  int index_sigmaxx = atom->find_custom("sigmaxx",tmp1,tmp2);             
-  int index_sigmayy = atom->find_custom("sigmayy",tmp1,tmp2);               
-  int index_sigmazz = atom->find_custom("sigmazz",tmp1,tmp2);             
+  //int index_sigmaxx = atom->find_custom("sigmaxx",tmp1,tmp2);             
+  //int index_sigmayy = atom->find_custom("sigmayy",tmp1,tmp2);               
+  //int index_sigmazz = atom->find_custom("sigmazz",tmp1,tmp2);   
+  //int index_contacts = atom->find_custom("contacts",tmp1,tmp2);    
+  //int index_adhesive_length = atom->find_custom("adhesive_length",tmp1,tmp2);      
   double * Ro = atom->dvector[index_Ro];
   double * Vgeo = atom->dvector[index_Vgeo];
   double * Velas = atom->dvector[index_Velas];
@@ -145,21 +162,23 @@ void FixMDRradiusUpdate::end_of_step()
   double * ddelta_bar = atom->dvector[index_ddelta_bar];
   double * psi = atom->dvector[index_psi];
   double * psi_b = atom->dvector[index_psi_b];
-  double * sigmaxx = atom->dvector[index_sigmaxx];
-  double * sigmayy = atom->dvector[index_sigmayy];
-  double * sigmazz = atom->dvector[index_sigmazz];
+  //double * sigmaxx = atom->dvector[index_sigmaxx];
+  //double * sigmayy = atom->dvector[index_sigmayy];
+  //double * sigmazz = atom->dvector[index_sigmazz];
+  //double * contacts = atom->dvector[index_contacts];
+  //double * adhesive_length = atom->dvector[index_adhesive_length];
 
   double *radius = atom->radius;
   int nlocal = atom->nlocal;
-  double sigmaxx_sum = 0.0;
-  double sigmayy_sum = 0.0;
-  double sigmazz_sum = 0.0; 
-  double Vparticles = 0.0;
+  //double sigmaxx_sum = 0.0;
+  //double sigmayy_sum = 0.0;
+  //double sigmazz_sum = 0.0; 
+  //double Vparticles = 0.0;
 
   //std::cout << "New step" << std::endl;
 
   for (int i = 0; i < nlocal; i++) {
-    
+  
     const double R = radius[i];
     Atot[i] = 4.0*M_PI*pow(R,2.0) + Atot_sum[i];
 
@@ -180,11 +199,11 @@ void FixMDRradiusUpdate::end_of_step()
       radius[i] += dR;
     }
 
-      if (dR > 3e-5) {
-        std::cout << "big dR change" << std::endl;
-      }
+      //if (dR > 1e-7) {
+      //  std::cout << "big dR change" << std::endl;
+      //}
    
-      std::cout << i << ", " << radius[i] << ", " << dR << ", " << dRnumerator[i] << ", " << dRdenominator[i] << ", " << dRdenominator[i] - 4.0*M_PI*pow(R,2.0)  << std::endl;
+      //std::cout << i << ", " << radius[i] << ", " << dR << ", " << dRnumerator[i] << ", " << dRdenominator[i] << ", " << dRdenominator[i] - 4.0*M_PI*pow(R,2.0)  << std::endl;
       
       
       //std::cout << i << ", " << radius[i] << " | " << psi_b[i] << ", " << psi[i] << " | " << Acon1[i] << ", " << Atot[i] << std::endl;
@@ -199,28 +218,25 @@ void FixMDRradiusUpdate::end_of_step()
     Acon1[i] = 0.0;
     Atot_sum[i] = 0.0;
     ddelta_bar[i] = 0.0;
+    //adhesive_length[i] = adhesive_length[i]/contacts[i]; // convert adhesive length to average aAdh for each particle
 
 
-    sigmaxx_sum += sigmaxx[i];
-    sigmayy_sum += sigmayy[i];
-    sigmazz_sum += sigmazz[i];
-    Vparticles += Velas[i];
-
-    sigmaxx[i] = 0.0;
-    sigmayy[i] = 0.0;
-    sigmazz[i] = 0.0;
+    //sigmaxx_sum += sigmaxx[i];
+    //sigmayy_sum += sigmayy[i];
+    //sigmazz_sum += sigmazz[i];
+    //Vparticles += Velas[i];
   }
 
-  double sigmaxx_avg = sigmaxx_sum/nlocal;
-  double sigmayy_avg = sigmayy_sum/nlocal;
-  double sigmazz_avg = sigmazz_sum/nlocal;
+  //double sigmaxx_avg = sigmaxx_sum/nlocal;
+  //double sigmayy_avg = sigmayy_sum/nlocal;
+  //double sigmazz_avg = sigmazz_sum/nlocal;
 
-  CSVWriter csvWriter("/Users/willzunker/lammps/sims/avicelTableting/avgStresses.csv");
-  std::stringstream rowDataStream;
-  rowDataStream << std::scientific << std::setprecision(4); // Set the format and precision
-  rowDataStream << sigmaxx_avg << ", " << sigmayy_avg << ", " << sigmazz_avg << ", " << Vparticles;
-  std::string rowData = rowDataStream.str();
-  csvWriter.writeRow(rowData);
+  //CSVWriter csvWriter("/Users/willzunker/lammps/sims/avicelTableting/avgStresses.csv");
+  //std::stringstream rowDataStream;
+  //rowDataStream << std::scientific << std::setprecision(4); // Set the format and precision
+  //rowDataStream << sigmaxx_avg << ", " << sigmayy_avg << ", " << sigmazz_avg << ", " << Vparticles;
+  //std::string rowData = rowDataStream.str();
+  //csvWriter.writeRow(rowData);
 }
 
 //std::cout << radius[i] << ", " << dR << ", " << dRnumerator[i] << ", " << dRdenominator[i] << ", " << dRdenominator[i] - 4.0*M_PI*pow(R,2.0)  << std::endl;

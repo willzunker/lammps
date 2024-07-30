@@ -87,6 +87,8 @@ class PairGranular : public Pair {
   int index_sigmaxx;
   int index_sigmayy;
   int index_sigmazz;
+  int index_contacts;
+  int index_adhesive_length;
 
   // storage of rigid body masses for use in granular interactions
 

@@ -41,6 +41,7 @@ while N_cur < N_goal && i < 3e6
     end
 
     i = i + 1;
+    N_cur
 end
 
 packingFraction = sum(4/3*pi*sphereRadii.^3)./(pi*cylSize(1)^2*cylSize(2));
@@ -50,5 +51,5 @@ if N_cur < N_goal
     error('Cannot find wanted number of points in %d iterations.', i)
 end
 
-plotSpheresCylinder(sphereCenters, sphereRadii)
+%plotSpheresCylinder(sphereCenters, sphereRadii)
 end

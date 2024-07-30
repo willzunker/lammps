@@ -1,0 +1,87 @@
+function plot_stress_strain(parameters,k,i,j,results_file,Y)
+
+%% define file path
+if k > 0 || j > 0 
+    IDi = num2str(i);
+    IDj = num2str(j);
+    IDk = num2str(k);
+    force_disp_file = strcat('/Users/willzunker/lammps/sims/residual_stress_study/',results_file,'/',results_file,'_',IDk,'_',IDi,IDj,'_force_disp.csv');
+    avg_stresses_file = strcat('/Users/willzunker/lammps/sims/residual_stress_study/',results_file,'/',results_file,'_',IDk,'_',IDi,IDj,'_avg_stresses.csv');
+else
+    IDi = num2str(i);
+    force_disp_file = strcat('/Users/willzunker/lammps/sims/residual_stress_study/',results_file,'/',results_file,'_',IDi,'_force_disp.csv');
+    avg_stresses_file = strcat('/Users/willzunker/lammps/sims/residual_stress_study/',results_file,'/',results_file,'_',IDi,'_avg_stresses.csv');
+end
+
+%% read in lammps data
+punchRadius = 4e-3; 
+punchArea = pi*punchRadius^2; 
+punchOffset = 0.01;        
+
+powderFillHeight = parameters.powder_height;
+
+force_disp = readmatrix(force_disp_file);
+punchPosition = force_disp(:,1)+punchOffset;
+strain = (powderFillHeight - punchPosition)./powderFillHeight; 
+force = -force_disp(:,2); 
+punchStress = force./punchArea; 
+
+avg_stresses = readmatrix(avg_stresses_file);
+volFrac = avg_stresses(:,4)./(punchPosition*punchArea); 
+sxx = -avg_stresses(:,1).*volFrac; 
+syy = -avg_stresses(:,2).*volFrac; 
+szz = -avg_stresses(:,3).*volFrac; 
+srr = (sxx + syy)./2;          
+szzOsrr = punchStress./srr;    
+
+%% plot data
+
+marker = {'o'};
+markercolor = {'#ffe066'};
+markeredgecolor = '#4d4d4d';
+markersize = 10.5;
+linewidth = 0.3;
+gcaFontsize = 27;
+labelFontsize = 32;
+legendFontsize = 22;
+
+figure()
+tiledlayout(2,2)
+
+% Upper and lower punch stress
+nexttile(2)
+plot(strain, punchStress/Y, marker{1},'MarkerSize', markersize, 'MarkerFaceColor', markercolor{1} , 'MarkerEdgeColor', markeredgecolor, 'LineWidth', linewidth)
+ylim([0 1.15*max(punchStress/Y)])
+xlim([0 0.4])
+set(gcf,'color','w');
+set(gca, 'FontSize', gcaFontsize)
+set(gca, 'TickLabelInterpreter','latex','XMinorTick','on','YMinorTick','on','Fontsize',gcaFontsize)
+xlabel('$\epsilon$','Interpreter','latex','FontSize', labelFontsize);
+ylabel('$\sigma_{zz}/Y$','Interpreter','latex','FontSize', labelFontsize);
+box on
+
+% Radial stress
+nexttile(3)
+plot(strain, srr/Y, marker{1},'MarkerSize', markersize, 'MarkerFaceColor', markercolor{1} , 'MarkerEdgeColor', markeredgecolor, 'LineWidth', linewidth)
+ylim([0 1.15*max(srr/Y)])
+xlim([0 0.4])
+set(gcf,'color','w');
+set(gca, 'FontSize', gcaFontsize)
+set(gca, 'TickLabelInterpreter','latex','XMinorTick','on','YMinorTick','on','Fontsize',gcaFontsize)
+xlabel('$\epsilon$','Interpreter','latex','FontSize', labelFontsize);
+ylabel('$\sigma_{rr}/Y$','Interpreter','latex','FontSize', labelFontsize);
+box on
+
+% Axial to radial stress ratio
+nexttile(4)
+plot(strain, szzOsrr, marker{1},'MarkerSize', markersize, 'MarkerFaceColor', markercolor{1}, 'MarkerEdgeColor', markeredgecolor, 'LineWidth', linewidth)
+ylim([0 6])
+xlim([0 0.4])
+set(gcf,'color','w');
+set(gca, 'FontSize', gcaFontsize)
+set(gca, 'TickLabelInterpreter','latex','XMinorTick','on','YMinorTick','on','Fontsize',gcaFontsize)
+xlabel('$\epsilon$','Interpreter','latex','FontSize', labelFontsize);
+ylabel('$\sigma_{zz}/\sigma_{rr}$','Interpreter','latex','FontSize', labelFontsize);
+box on
+
+end

@@ -17,6 +17,7 @@
 #include "math_const.h"
 #include "atom.h"
 #include "csv_writer.h"
+#include "update.h"
 
 #include <cmath>
 #include <iostream>
@@ -403,7 +404,10 @@ GranSubModNormalMDR::GranSubModNormalMDR(GranularModel *gm, LAMMPS *lmp) :
 
   nondefault_history_transfer = 1;
   transfer_history_factor = new double[size_history];
-  transfer_history_factor[0] = +1;
+  //transfer_history_factor[0] = +1;
+  for (int i = 0; i < size_history; i++) { 
+    transfer_history_factor[i] = +1;
+  }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -500,9 +504,10 @@ double GranSubModNormalMDR::calculate_forces()
   int index_psi = atom->find_custom("psi",tmp1,tmp2);                     // ratio of free surface area to total surface area
   int index_sigmaxx = atom->find_custom("sigmaxx",tmp1,tmp2);             // xx-component of the stress tensor, not necessary for force calculation
   int index_sigmayy = atom->find_custom("sigmayy",tmp1,tmp2);             // yy-component of the stress tensor, not necessary for force calculation  
-  int index_sigmazz = atom->find_custom("sigmazz",tmp1,tmp2);             // zz-component of the stress tensor, not necessary for force calculation   
+  int index_sigmazz = atom->find_custom("sigmazz",tmp1,tmp2);             // zz-component of the stress tensor, not necessary for force calculation 
+  int index_contacts = atom->find_custom("contacts",tmp1,tmp2);                     // total contacts on particle 
+  int index_adhesive_length = atom->find_custom("adhesive_length",tmp1,tmp2);       // total contacts on particle 
   double * Rinitial = atom->dvector[index_Ro];
-  //std::cout << "It could assign Rinitial" << std::endl;
   double * Vgeo = atom->dvector[index_Vgeo];
   double * Velas = atom->dvector[index_Velas];
   double * Vcaps = atom->dvector[index_Vcaps];
@@ -518,6 +523,9 @@ double GranSubModNormalMDR::calculate_forces()
   double * sigmaxx = atom->dvector[index_sigmaxx];
   double * sigmayy = atom->dvector[index_sigmayy];
   double * sigmazz = atom->dvector[index_sigmazz];
+  double * contacts = atom->dvector[index_contacts];
+  double * adhesive_length = atom->dvector[index_adhesive_length];
+  
 
   double * history = & gm->history[history_index]; // load in all history variables  
 
@@ -535,6 +543,10 @@ double GranSubModNormalMDR::calculate_forces()
     double * Ac_offset; 
     double * eps_bar_offset; 
     double * penalty_offset;
+
+    //if (gm->i == 0 && gm->j == 2|| gm->i == 2 && gm->j == 0) {
+    //std::cout << gm->i << ", " << gm->j << ", " << gm->contact_type << std::endl;
+    //}
 
     if (contactSide == 0) {
       if (gm->contact_type == PAIR) {
@@ -586,6 +598,17 @@ double GranSubModNormalMDR::calculate_forces()
     // temporary i and j indices
     const int i = gm->i;
     const int j = gm->j;
+
+
+    //if (lmp->update->ntimestep == 229999 && i == 2 && j == 0) {
+    //  std::cout << "timestep is equal to 229999" << std::endl;
+    //}
+
+    //if ( (i == 0 && j == 2 && gm->contact_type == 0) || (i == 2 && j == 0 && gm->contact_type == 0)) {
+    //if ( (gm->contact_type == 0) ) {
+      //std::cout << i << ", " << j << ", " << gm->contact_type << " || " << *delta_offset << ", " << (uintptr_t)(delta_offset) << " || " << *deltao_offset << ", " << (uintptr_t)(deltao_offset) << " || " << *delta_MDR_offset << ", " << (uintptr_t)(delta_MDR_offset) << " || " << *delta_BULK_offset << ", " << (uintptr_t)(delta_BULK_offset) << " || " << *deltamax_MDR_offset << ", " << (uintptr_t)(deltamax_MDR_offset) << " || "  << *Yflag_offset << ", " << (uintptr_t)(Yflag_offset) << " || " << *deltaY_offset << ", " << (uintptr_t)(deltaY_offset) << " || " << *cA_offset << ", " << (uintptr_t)(cA_offset) << " || " << *aAdh_offset << ", " << (uintptr_t)(aAdh_offset) << " || " << *Ac_offset << ", " << (uintptr_t)(Ac_offset) << " || " << *eps_bar_offset << ", " << (uintptr_t)(eps_bar_offset) << std::endl;
+    //  std::cout << i << ", " << j << ", " << gm->contact_type << " || " << *delta_offset << ", " << (uintptr_t)(delta_offset) << " || " << *deltao_offset << ", " << (uintptr_t)(deltao_offset) << " || " << *delta_MDR_offset << ", " << (uintptr_t)(delta_MDR_offset) << " || " << *delta_BULK_offset << ", " << (uintptr_t)(delta_BULK_offset) << " || " << *deltamax_MDR_offset << ", " << (uintptr_t)(deltamax_MDR_offset) << " || "  << *Yflag_offset << ", " << (uintptr_t)(Yflag_offset) << " || " << *deltaY_offset << ", " << (uintptr_t)(deltaY_offset) << " || " << Velas[i] << ", " << eps_bar[i] << std::endl;
+    //}
 
     // material and geometric property definitions
     // E, nu, Y gamma , psi_b, and CoR are already defined.
@@ -729,6 +752,9 @@ double GranSubModNormalMDR::calculate_forces()
       if ( std::isnan(F_MDR) ) std::cout << "F_MDR is NaN, non-adhesive case" << std::endl;
     }
     
+    contacts[i] += 1;
+    adhesive_length[i] += aAdh;
+
     // contact penalty scheme
     penalty_offset = & history[penalty_offset_];
     double pij = *penalty_offset;
@@ -780,13 +806,20 @@ double GranSubModNormalMDR::calculate_forces()
     const double eps_bar_contact = (1.0/(3*kappa*Velas[i]))*(fx*bx + fy*by + fz*bz);
     eps_bar[i] += eps_bar_contact;
     
+      //if ( (i == 0 && j == 2 && gm->contact_type == 0) || (i == 2 && j == 0 && gm->contact_type == 0)) {
+      //std::cout << i << ", " << j << ", " << gm->contact_type << " || " << delta << ", " << *delta_offset << ", " << (uintptr_t)(delta_offset) << " || " << deltao << ", " << *deltao_offset << ", " << (uintptr_t)(deltao_offset) << " || " << delta_MDR << ", " << *delta_MDR_offset << ", " << (uintptr_t)(delta_MDR_offset) << " || " << *Yflag_offset << ", " << (uintptr_t)(Yflag_offset) << " || " << R << std::endl;
+      //std::cout << i << ", " << j << ", " << gm->contact_type << " || " << fx << ", " << fy << ", " << fz << " || " << bx << ", " << by << ", " << bz << ", " << Velas[i] << std::endl;
+      //std::cout << i << ", " << j << ", " << gm->contact_type << " || " << eps_bar_contact << ", " << *eps_bar_offset << ", " << (uintptr_t)(eps_bar_offset) << " || " << wij << ", " << ddeltao << ", " << deltao << ", " << delta << ", " << *delta_offset << " || " << Ro << ", " << R << std::endl;
+      //}
+
+      //if () {
+      //  std::cout << j << ", " << -Vo*(eps_bar_contact - *eps_bar_offset) - wij*M_PI*ddeltao*( 2.0*deltao*Ro - pow(deltao,2.0) + pow(R,2.0) - pow(Ro,2.0) ) << ", " << -Vo*(eps_bar_contact - *eps_bar_offset) << ", " << wij*M_PI*ddeltao*( 2.0*deltao*Ro - pow(deltao,2.0) + pow(R,2.0) - pow(Ro,2.0) ) << std::endl;
+      //std::cout << i << ", " << j << ", " << gm->contact_type << " || " << eps_bar_contact << ", " << *eps_bar_offset << ", " << (uintptr_t)(eps_bar_offset) << " || " << wij << ", " << ddeltao << ", " << deltao << " || " << Ro << ", " << R << std::endl;
+      //}
+
     if(delta_MDR == deltamax_MDR && *Yflag_offset > 0.0 && F_MDR > 0.0){
       const double Vo = (4.0/3.0)*M_PI*pow(Ro,3.0);
       dRnumerator[i] += -Vo*(eps_bar_contact - *eps_bar_offset) - wij*M_PI*ddeltao*( 2.0*deltao*Ro - pow(deltao,2.0) + pow(R,2.0) - pow(Ro,2.0) );
-
-      if (i == 12) {
-        std::cout << j << ", " << -Vo*(eps_bar_contact - *eps_bar_offset) - wij*M_PI*ddeltao*( 2.0*deltao*Ro - pow(deltao,2.0) + pow(R,2.0) - pow(Ro,2.0) ) << ", " << -Vo*(eps_bar_contact - *eps_bar_offset) << ", " << wij*M_PI*ddeltao*( 2.0*deltao*Ro - pow(deltao,2.0) + pow(R,2.0) - pow(Ro,2.0) ) << std::endl;
-      }
 
       dRdenominator[i] += wij*2.0*M_PI*R*(deltao + R - Ro);
     }
@@ -813,11 +846,11 @@ double GranSubModNormalMDR::calculate_forces()
 
   // wall force magnifier
   double * deltao_offset = & history[deltao_offset_0];
-  const double wallForceMagnifer = std::exp(10.0*(*deltao_offset)/Rinitial[gm->i] - 9.0) + 1.0;
-  //const double wallForceMagnifer = 1.0;
+  //const double wallForceMagnifer = std::exp(10.0*(*deltao_offset)/Rinitial[gm->i] - 9.0) + 1.0;
+  const double wallForceMagnifer = 1.0;
 
   // assign final force
-  (gm->contact_type != PAIR) ? F = wij*F0*wallForceMagnifer : F = wij*(F0 + F1)/2;
+  (gm->contact_type != PAIR) ? F = wij*F0*wallForceMagnifer : F = wij*(F0 + F1)/2;  // F = 2*wij*pow(1/F0 + 1/F1,-1);
 
   // calculate damping force
   if (F > 0.0) {
@@ -839,28 +872,28 @@ double GranSubModNormalMDR::calculate_forces()
     F += wij*F_DAMP;
   }
 
-  double **x = atom->x;
-  const double xi = x[gm->i][0];
-  const double xj = x[gm->j][0];
-  const double del = 20.0 - abs(xi-xj);
+  //double **x = atom->x;
+  //const double xi = x[gm->i][0];
+  //const double xj = x[gm->j][0];
+  //const double del = 20.0 - abs(xi-xj);
   
-  if (gm->i == 0 && gm->j == 1) {
-    CSVWriter csvWriter("/Users/willzunker/lammps/sims/compressionSleeve/pairContactsTopCen.csv");
-    std::stringstream rowDataStream;
-    rowDataStream << std::scientific << std::setprecision(4); // Set the format and precision
-    rowDataStream << del << ", " << F;
-    std::string rowData = rowDataStream.str();
-    csvWriter.writeRow(rowData);
-  }
+  //if (gm->i == 0 && gm->j == 1) {
+  //  CSVWriter csvWriter("/Users/willzunker/lammps/sims/compressionSleeve/pairContactsTopCen.csv");
+  //  std::stringstream rowDataStream;
+  //  rowDataStream << std::scientific << std::setprecision(4); // Set the format and precision
+  //  rowDataStream << del << ", " << F;
+  //  std::string rowData = rowDataStream.str();
+  //  csvWriter.writeRow(rowData);
+  //}
 
-  if (gm->i == 0 && gm->j == 2) {
-    CSVWriter csvWriter("/Users/willzunker/lammps/sims/compressionSleeve/pairContactsBotCen.csv");
-    std::stringstream rowDataStream;
-    rowDataStream << std::scientific << std::setprecision(4); // Set the format and precision
-    rowDataStream << del << ", " << F;
-    std::string rowData = rowDataStream.str();
-    csvWriter.writeRow(rowData);
-  }
+  //if (gm->i == 0 && gm->j == 2) {
+  //  CSVWriter csvWriter("/Users/willzunker/lammps/sims/compressionSleeve/pairContactsBotCen.csv");
+  //  std::stringstream rowDataStream;
+  //  rowDataStream << std::scientific << std::setprecision(4); // Set the format and precision
+  //  rowDataStream << del << ", " << F;
+  //  std::string rowData = rowDataStream.str();
+  //  csvWriter.writeRow(rowData);
+  //}
 
   return F;
 }

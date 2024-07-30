@@ -55,7 +55,7 @@ enum { SHIFT_NO, SHIFT_YES, SHIFT_POSSIBLE };
 
 static constexpr double EINERTIA = 0.2;    // moment of inertia prefactor for ellipsoid
 
-static constexpr int ATOMPERBIN = 30;
+static constexpr int ATOMPERBIN = 100;
 static constexpr double BIG = 1.0e20;
 static constexpr int VBINSIZE = 5;
 static constexpr double TOLERANCE = 0.00001;

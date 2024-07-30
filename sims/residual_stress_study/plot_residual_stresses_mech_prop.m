@@ -1,0 +1,54 @@
+function plot_residual_stresses_mech_prop(results_file,parameters,EY,gammapYRmean,RstdRmean)
+
+Y = parameters.Y;
+
+for k = 1 : length(RstdRmean)
+    for i = 1 : length(EY)
+        for j = 1 : length(gammapYRmean)
+            force_disp_file = strcat('/Users/willzunker/lammps/sims/residual_stress_study/',results_file,'/',results_file,'_',num2str(k),'_',num2str(i),num2str(j),'_force_disp.csv');
+            avg_stresses_file = strcat('/Users/willzunker/lammps/sims/residual_stress_study/',results_file,'/',results_file,'_',num2str(k),'_',num2str(i),num2str(j),'_avg_stresses.csv');
+            force_disp = abs(readmatrix(force_disp_file));
+            avg_stresses = abs(readmatrix(avg_stresses_file));
+            [max_force,max_index] = max(force_disp(:,2));
+            threshold = 0.01*max_force;
+            indices = find(force_disp(max_index:end,2) < threshold);
+            residual_index = indices(1)+(max_index-1);
+            residual_stress{k}(i,j) = mean(avg_stresses(residual_index,1:2));
+        end
+    end
+end
+
+figure()
+tiledlayout(2,3)
+gcaFontsize = 27;
+labelFontsize = 32;
+legendFontsize = 22;
+
+% Create a meshgrid from EY and gammapYRmean
+[EY_grid, gammapYRmean_grid] = meshgrid(EY, gammapYRmean);
+
+for k = 1 : length(RstdRmean)
+
+nexttile()
+
+% Create the filled contour plot
+contourf(EY_grid, gammapYRmean_grid, residual_stress{k}./Y);
+
+% Add color bar
+h = colorbar;
+h.Label.Interpreter = 'latex';
+h.Label.String = '$\sigma_\textrm{res}/Y$';
+set(h,'TickLabelInterpreter','latex');
+
+% Add labels and title
+set(gcf,'color','w');
+set(gca, 'FontSize', gcaFontsize)
+set(gca, 'TickLabelInterpreter','latex','XMinorTick','on','YMinorTick','on','Fontsize',gcaFontsize)
+xlabel('$E/Y$','Interpreter','latex','FontSize', labelFontsize);
+ylabel('$\Delta\gamma_p/(YR\textrm{mean})$','Interpreter','latex','FontSize', labelFontsize);
+box on
+
+set(gca, 'XScale', 'log', 'YScale', 'log');
+end
+
+end

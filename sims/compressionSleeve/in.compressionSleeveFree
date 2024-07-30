@@ -4,7 +4,7 @@ atom_style sphere
 atom_modify map array 
 comm_modify vel yes
 units si
-newton off
+newton on
 neighbor      100 bin
 neigh_modify  delay 0
 timestep 1e-4

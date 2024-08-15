@@ -77,6 +77,7 @@ void FixMDRmeanSurfDisp::pre_force(int)
   FixNeighHistory * fix_history = dynamic_cast<FixNeighHistory *>(modify->get_fix_by_id("NEIGH_HISTORY_GRANULAR"));
   PairGranular * pair = dynamic_cast<PairGranular *>(force->pair_match("granular",1));
   NeighList * list = pair->list;
+  
   const int size_history = pair->get_size_history();
 
   {
@@ -88,9 +89,9 @@ void FixMDRmeanSurfDisp::pre_force(int)
 
   bool touchflag = false;
 
-  class GranularModel* model;
-  class GranularModel** models_list = pair->models_list;
-  int ** types_indices = pair->types_indices;
+  //class GranularModel* model;
+  //class GranularModel** models_list = pair->models_list;
+  //int ** types_indices = pair->types_indices;
 
   double **x = atom->x;
   int *type = atom->type;
@@ -171,6 +172,10 @@ void FixMDRmeanSurfDisp::pre_force(int)
                     allhistory_j = firsthistory[j];
                     history_jk = &allhistory_j[size_history * jk];
                     pjk = &history_jk[22]; // penalty for contact j and k
+                    //int rank = 0;
+                    //MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+                    //std::cout << "Print 183 pjk: " << rank << ", " << pjk << std::endl;
+                    //std::cout << "Print 183 pjk[0]: " << rank << ", " << pjk[0] << std::endl;
                     break;
                   }
                 }
@@ -185,11 +190,16 @@ void FixMDRmeanSurfDisp::pre_force(int)
                       allhistory_k = firsthistory[k];
                       history_kj = &allhistory_k[size_history * kj];
                       pjk = &history_kj[22]; // penalty for contact j and k
+                      //int rank = 0;
+                      //MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+                      //std::cout << "Print 198 pjk: " << rank << ", " << pjk << std::endl;
+                      //std::cout << "Print 198 pjk[0]: " << rank << ", " << pjk[0] << std::endl;
                       break;
                     }
                   }         
                 }
 
+                //std::cout << "Print: " << __LINE__ << std::endl;
                 std::vector<double> distances = {r_ij,r_ik,r_jk};
                 auto maxElement = std::max_element(distances.begin(), distances.end());
                 double maxValue = *maxElement;
@@ -213,14 +223,18 @@ void FixMDRmeanSurfDisp::pre_force(int)
                   const double alpha = std::acos(enx_ji*enx_jk + eny_ji*eny_jk + enz_ji*enz_jk); 
                   pik[0] += 1.0/( 1.0 + std::exp(-50.0*(alpha/M_PI - 1.0/2.0)) );
                 } else { // the central particle is i
-                  const double enx_ij = delx_ij * rinv_ij;
-                  const double eny_ij = dely_ij * rinv_ij;
-                  const double enz_ij = delz_ij * rinv_ij;
-                  const double enx_ik = delx_ik * rinv_ik;
-                  const double eny_ik = dely_ik * rinv_ik;
-                  const double enz_ik = delz_ik * rinv_ik;
-                  const double alpha = std::acos(enx_ij*enx_ik + eny_ij*eny_ik + enz_ij*enz_ik); 
-                  pjk[0] += 1.0/( 1.0 + std::exp(-50.0*(alpha/M_PI - 1.0/2.0)) );
+                  if (j < atom->nlocal || k < atom->nlocal) {
+                    const double enx_ij = delx_ij * rinv_ij;
+                    const double eny_ij = dely_ij * rinv_ij;
+                    const double enz_ij = delz_ij * rinv_ij;
+                    const double enx_ik = delx_ik * rinv_ik;
+                    const double eny_ik = dely_ik * rinv_ik;
+                    const double enz_ik = delz_ik * rinv_ik;
+                    const double alpha = std::acos(enx_ij*enx_ik + eny_ij*eny_ik + enz_ij*enz_ik); 
+                    //std::cout << "Print: " << __LINE__ << std::endl;
+                    pjk[0] += 1.0/( 1.0 + std::exp(-50.0*(alpha/M_PI - 1.0/2.0)) );
+                    //std::cout << "Print: " << __LINE__ << std::endl;
+                  }
                 }
               }
             }
@@ -249,6 +263,7 @@ void FixMDRmeanSurfDisp::pre_force(int)
   double *radius = atom->radius;
   int nlocal = atom->nlocal;
 
+  
   inum = list->inum;
   ilist = list->ilist;
   numneigh = list->numneigh;
@@ -298,19 +313,79 @@ void FixMDRmeanSurfDisp::pre_force(int)
       //const double wij = std::max(1.0-pij,0.0);
       const double delta = model->radsum - sqrt(model->rsq);
 
+      const int delta_offset_0 = 0;           // apparent overlap 
+      const int delta_offset_1 = 1;           
+      const int aAdh_offset_0 = 16;           // adhesive contact radius
+      const int aAdh_offset_1 = 17;
+      const int Ac_offset_0 = 18;             // contact area
+      const int Ac_offset_1 = 19;
+
+      const int delta2_offset_ = 24;
+      const int F_offset_0 = 25;
+      const int F_offset_1 = 26;
+      const int delta2_offset_0 = 27;           // apparent overlap 
+      const int delta2_offset_1 = 28; 
+      const int h_offset_0 = 29;
+      const int h_offset_1 = 30;  
+      const int deltae1D_offset_0 = 31;
+      const int deltae1D_offset_1 = 32;  
+      const int h_BULK_offset_0 = 33;
+      const int h_BULK_offset_1 = 34;  
+      const int k_BULK_offset_0 = 35;
+      const int k_BULK_offset_1 = 36; 
+      const int k_MDR_offset_0 = 37;
+      const int k_MDR_offset_1 = 38; 
+
+      // More rigid flat placement schemes
+      double a0 = history[aAdh_offset_0];
+      double a1 = history[aAdh_offset_1];
+      double F0old = history[F_offset_0];
+      double F1old = history[F_offset_1];
+      double h0 = history[h_offset_0];
+      double h1 = history[h_offset_1];
+      double h_BULK0 = history[h_BULK_offset_0];
+      double h_BULK1 = history[h_BULK_offset_1];
+      double k_BULK0 = history[k_BULK_offset_0];
+      double k_BULK1 = history[k_BULK_offset_1];
+      double delta2_offset0 = history[delta2_offset_0];
+      double delta2_offset1 = history[delta2_offset_1];
+      double delta2_offset = history[delta2_offset_];
+      double ddelta = delta - delta2_offset;
+      double k0 = history[k_MDR_offset_0];
+      double k1 = history[k_MDR_offset_1];
+      double dde0;
+      double dde1;
+      (delta2_offset0 == 0.0) ? dde0 = ddelta/2.0 : dde0 = -((F0old - F1old - a1*ddelta*k1*h1 - ddelta*h_BULK1*k_BULK1)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
+      (delta2_offset1 == 0.0) ? dde1 = ddelta/2.0 : dde1 = -((F1old - F0old - a0*ddelta*k0*h0 - ddelta*h_BULK0*k_BULK0)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
+      //(*delta2_offset0 == 0.0) ? dde0 = ddelta/2.0 : dde0 = -((F0old - F1old - a1*ddelta*k1*h1)/(a0*k0*h0 + a1*k1*h1));
+      //(*delta2_offset1 == 0.0) ? dde1 = ddelta/2.0 : dde1 = -((F1old - F0old  - a0*ddelta*k0*h0)/(a0*k0*h0 + a1*k1*h1));
+      double delta0 = delta2_offset0 + dde0;
+      double delta1 = delta2_offset1 + dde1;
+      std::cout << "Mean disp   : " << delta << ", " << ddelta << ", " << model->radi << ", " << model->radj << " | delta: " << delta0 << ", " << delta1 << " | delta2_offset: " << delta2_offset0 << ", " << delta2_offset1 << "| dde: " << dde0 << ", " << dde1 << "| Fold: " << F0old << ", " << F1old << " | a: " << a0 << ", " << a1 << " | k_BULK: " << k_BULK0 << ", " << k_BULK1 << " | h_BULK: " << h_BULK0 << ", " << h_BULK1 << std::endl;
+
       if (Acon0[j] != 0.0) {
-        const double delta_offset0 = history[0];
-        const double ddelta = delta/2.0 - delta_offset0; // Divide by 2.0 since we are storing 1/2 deltan in main MDR script
-        const double Ac_offset0 = history[18];
-        ddelta_bar[j] += Ac_offset0/Acon0[j]*ddelta; // Multiply by 0.5 since displacement is shared equally between deformable particles.
+        const double Ac_offset0 = history[Ac_offset_0];
+        ddelta_bar[j] += Ac_offset0/Acon0[j]*dde0; // Multiply by 0.5 since displacement is shared equally between deformable particles.
       }
 
       if (Acon0[i] != 0.0) {
-        const double delta_offset1 = history[1];
-        const double ddelta = delta/2.0 - delta_offset1; // Divide by 2.0 since we are storing 1/2 deltan in main MDR script
-        const double Ac_offset1 = history[19];
-        ddelta_bar[i] += Ac_offset1/Acon0[i]*ddelta;
+        const double Ac_offset1 = history[Ac_offset_1];
+        ddelta_bar[i] += Ac_offset1/Acon0[i]*dde1;
       }
+
+      //if (Acon0[j] != 0.0) {
+      //  const double delta_offset0 = history[0];
+      //  const double ddelta = delta/2.0 - delta_offset0; // Divide by 2.0 since we are storing 1/2 deltan in main MDR script
+      //  const double Ac_offset0 = history[18];
+      //  ddelta_bar[j] += Ac_offset0/Acon0[j]*ddelta; // Multiply by 0.5 since displacement is shared equally between deformable particles.
+      //}
+//
+      //if (Acon0[i] != 0.0) {
+      //  const double delta_offset1 = history[1];
+      //  const double ddelta = delta/2.0 - delta_offset1; // Divide by 2.0 since we are storing 1/2 deltan in main MDR script
+      //  const double Ac_offset1 = history[19];
+      //  ddelta_bar[i] += Ac_offset1/Acon0[i]*ddelta;
+      //}
 
     }
   }

@@ -72,7 +72,7 @@ void FixMDRradiusUpdate::pre_force(int)
   //model = models_list[0];
   //class GranSubModNormalMDR* norm_model = dynamic_cast<GranSubModNormalMDR *>(model->normal_model);
 
-  //std::cout << "Preforce was called" << std::endl;
+  std::cout << "Preforce was called radius update" << std::endl;
 
   // assign correct value to initially non-zero MDR particle history variables 
   int tmp1, tmp2;
@@ -216,6 +216,7 @@ void FixMDRradiusUpdate::end_of_step()
     dRdenominator[i] = 0.0;
     Acon0[i] = Acon1[i];
     Acon1[i] = 0.0;
+    std::cout << "Acon reset: " << Acon0[i] << ", " << Acon1[i] << std::endl; 
     Atot_sum[i] = 0.0;
     ddelta_bar[i] = 0.0;
     //adhesive_length[i] = adhesive_length[i]/contacts[i]; // convert adhesive length to average aAdh for each particle

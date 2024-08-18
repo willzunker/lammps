@@ -28,6 +28,8 @@ class FixMDRradiusUpdate : public Fix {
  public:
   FixMDRradiusUpdate(class LAMMPS *, int, char **);
   int setmask() override;
+  void setup(int) override;
+  void setup_pre_force(int) override;
   void pre_force(int) override;
   void end_of_step() override; // FOR MDR
 

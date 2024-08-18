@@ -5,10 +5,9 @@ atom_modify map array
 comm_modify vel yes
 units si
 newton off
-neighbor      0.7e-3 bin
+neighbor      0.16e-3 bin
 neigh_modify every 10 delay 10000 check yes 
-timestep 2e-7
-#processors 3 3 1
+timestep 0.5e-7
 
 ######################### SIMULATION BOUNDING BOX, INTEGRATION, AND, GRAVITY ###########################
 
@@ -17,7 +16,7 @@ read_data spheres.data
 
 ######################################### ADD DIE AND ATOM PARAMETERIZATION ##############################################
 
-variable atomRadius              equal 0.44e-3
+variable atomRadius              equal 0.131e-3
 variable atomDiameter            equal 2*${atomRadius}
 variable atomDensity             equal 1560 
 variable dieRadius               equal 4e-3

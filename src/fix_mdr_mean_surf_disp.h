@@ -28,7 +28,7 @@ class FixMDRmeanSurfDisp : public Fix {
  public:
   FixMDRmeanSurfDisp(class LAMMPS *, int, char **);
   int setmask() override;
-  void setup(int) override;
+  void setup_pre_force(int) override;
   void pre_force(int) override; // FOR MDR
 
  private:

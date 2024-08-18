@@ -13,8 +13,8 @@ cylSize = [cyl_r,cyl_h];
 cylCenter = [0,0,cyl_h/2];
 
 % define number of particles and their radii
-N_goal = 15000;  % goal for number of particles to insert
-R_mean = 0.131e-3;   % average sphere radius
+N_goal = 400;  % goal for number of particles to insert
+R_mean = 0.44e-3;   % average sphere radius
 R_std = R_mean/20;   % standard deviation of sphere radius
 
 [sphereCenters, sphereRadii] = placeCylSpheres(cylSize, cylCenter, N_goal, R_mean, R_std);

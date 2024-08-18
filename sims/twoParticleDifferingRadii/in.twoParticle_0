@@ -19,7 +19,7 @@ create_box 2 simBox
 
 pair_style granular
 # E, nu, Y, gamma, psi_b, CoR
-pair_coeff * * mdr 1e6 0.3 5e4 0 0.08 1.0 tangential linear_nohistory 0.0 0.0
+pair_coeff * * mdr 1e6 0.3 5e4 1000 0.08 1.0 tangential linear_nohistory 0.0 0.0
 
 ##################################### INSERT PARTICLES ####################################################
 

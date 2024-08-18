@@ -57,7 +57,7 @@ int FixMDRmeanSurfDisp::setmask()
   return mask;
 }
 
-void FixMDRmeanSurfDisp::setup(int /*vflag*/)
+void FixMDRmeanSurfDisp::setup_pre_force(int /*vflag*/)
 {
   pre_force(0);
 }
@@ -355,13 +355,26 @@ void FixMDRmeanSurfDisp::pre_force(int)
       double k1 = history[k_MDR_offset_1];
       double dde0;
       double dde1;
-      (delta2_offset0 == 0.0) ? dde0 = ddelta/2.0 : dde0 = -((F0old - F1old - a1*ddelta*k1*h1 - ddelta*h_BULK1*k_BULK1)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
-      (delta2_offset1 == 0.0) ? dde1 = ddelta/2.0 : dde1 = -((F1old - F0old - a0*ddelta*k0*h0 - ddelta*h_BULK0*k_BULK0)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
+      if ((delta2_offset0 == 0.0 || delta2_offset1 == 0.0) || (a0 == 0.0 && a1 == 0.0)) {
+        dde0 = ddelta/2.0;
+        dde1 = ddelta/2.0;
+      } else if (a0 == 0.0) {
+        dde0 = ddelta;
+        dde1 = 0.0;
+      } else if (a1 == 0.0){
+        dde0 = 0.0;
+        dde1 = ddelta;
+      } else {
+        dde0 = -((F0old - F1old - a1*ddelta*k1*h1 - ddelta*h_BULK1*k_BULK1)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
+        dde1 = -((F1old - F0old - a0*ddelta*k0*h0 - ddelta*h_BULK0*k_BULK0)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
+      }
+      //(delta2_offset0 == 0.0 || a0 == 0.0 || a1 == 0.0) ? dde0 = ddelta/2.0 : dde0 = -((F0old - F1old - a1*ddelta*k1*h1 - ddelta*h_BULK1*k_BULK1)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
+      //(delta2_offset1 == 0.0 || a0 == 0.0 || a1 == 0.0) ? dde1 = ddelta/2.0 : dde1 = -((F1old - F0old - a0*ddelta*k0*h0 - ddelta*h_BULK0*k_BULK0)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
       //(*delta2_offset0 == 0.0) ? dde0 = ddelta/2.0 : dde0 = -((F0old - F1old - a1*ddelta*k1*h1)/(a0*k0*h0 + a1*k1*h1));
       //(*delta2_offset1 == 0.0) ? dde1 = ddelta/2.0 : dde1 = -((F1old - F0old  - a0*ddelta*k0*h0)/(a0*k0*h0 + a1*k1*h1));
       double delta0 = delta2_offset0 + dde0;
       double delta1 = delta2_offset1 + dde1;
-      std::cout << "Mean disp   : " << delta << ", " << ddelta << ", " << model->radi << ", " << model->radj << " | delta: " << delta0 << ", " << delta1 << " | delta2_offset: " << delta2_offset0 << ", " << delta2_offset1 << "| dde: " << dde0 << ", " << dde1 << "| Fold: " << F0old << ", " << F1old << " | a: " << a0 << ", " << a1 << " | k_BULK: " << k_BULK0 << ", " << k_BULK1 << " | h_BULK: " << h_BULK0 << ", " << h_BULK1 << std::endl;
+      //std::cout << "Mean disp   : " << delta << ", " << ddelta << ", " << model->radi << ", " << model->radj << " | delta: " << delta0 << ", " << delta1 << " | delta2_offset: " << delta2_offset0 << ", " << delta2_offset1 << "| dde: " << dde0 << ", " << dde1 << "| Fold: " << F0old << ", " << F1old << " | a: " << a0 << ", " << a1 << " | k_BULK: " << k_BULK0 << ", " << k_BULK1 << " | h_BULK: " << h_BULK0 << ", " << h_BULK1 << std::endl;
 
       if (Acon0[j] != 0.0) {
         const double Ac_offset0 = history[Ac_offset_0];

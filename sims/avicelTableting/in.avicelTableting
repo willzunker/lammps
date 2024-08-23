@@ -5,9 +5,9 @@ atom_modify map array
 comm_modify vel yes
 units si
 newton off
-neighbor      0.7e-3 bin
+neighbor      0.6e-3 bin
 neigh_modify every 10 delay 10000 check yes 
-timestep 2e-7
+timestep 2.00e-7
 #processors 3 3 1
 
 ######################### SIMULATION BOUNDING BOX, INTEGRATION, AND, GRAVITY ###########################
@@ -31,7 +31,7 @@ pair_style granular
 variable YoungsModulus equal 7.5e9
 variable PoissonsRatio equal 0.3
 variable YieldStress equal 1.5e8
-variable SurfaceEnergy equal 220
+variable SurfaceEnergy equal 0.0 #220
 variable SurfaceEnergyWall equal 0.0
 variable psi_b equal 0.6
 variable CoR equal 0.5
@@ -87,7 +87,8 @@ thermo_modify lost ignore norm no
 ##################################### SET UP DUMP OUTPUTS  ####################################################
 
 compute ke all ke/atom
-variable output_rate equal round(1e-3/dt)
+#variable output_rate equal round(1e-3/dt)
+variable output_rate equal 100
 
 #dump 1 all custom 1 uniaxialCompression id type f_plane_yz_neg[*]
 #variable az_upperPunch atom f_upperPunch[7]

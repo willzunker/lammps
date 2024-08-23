@@ -19,7 +19,7 @@ create_box 2 simBox
 
 pair_style granular
 # E, nu, Y, gamma, psi_b, CoR
-pair_coeff * * mdr 1e6 0.3 5e4 0.0 0.08 1.0 tangential linear_nohistory 0.0 0.0
+pair_coeff * * mdr 1e6 0.3 5e4 1000 0.08 1.0 tangential linear_nohistory 0.0 0.0
 
 ##################################### INSERT PARTICLES ####################################################
 
@@ -56,7 +56,7 @@ variable vel equal ${ddelta}/${mydt}
 variable vel_neg equal -${vel}
 variable zeroDisp equal 0.0
 
-variable deltaI     equal 0.3
+variable deltaI     equal 0.6
 variable deltaII    equal 0.6
 variable deltaIII   equal 4.75
 variable deltaIV    equal 6.25
@@ -89,13 +89,13 @@ unfix topAtom_Iload
 fix topAtom_Iunload topAtom move linear ${vel} 0.0 0.0   
 run ${stepsIunload} upto
 
-unfix topAtom_Iunload
-fix topAtom_IIload topAtom move linear ${vel_neg} 0.0 0.0   
-run ${stepsIIload} upto
-
-unfix topAtom_IIload
-fix topAtom_IIunload topAtom move linear ${vel} 0.0 0.0  
-run ${stepsIIunload} upto
+#unfix topAtom_Iunload
+#fix topAtom_IIload topAtom move linear ${vel_neg} 0.0 0.0   
+#run ${stepsIIload} upto
+#
+#unfix topAtom_IIload
+#fix topAtom_IIunload topAtom move linear ${vel} 0.0 0.0  
+#run ${stepsIIunload} upto
 
 #unfix topAtom_IIunload
 #unfix xnegAtom_IIunload

@@ -66,6 +66,7 @@ void FixMDRmeanSurfDisp::setup_pre_force(int /*vflag*/)
 
 void FixMDRmeanSurfDisp::pre_force(int)
 {
+  //std::cout << " " << std::endl;
   //std::cout << "New Step" << std::endl;
 
   int tmp1, tmp2;
@@ -355,19 +356,28 @@ void FixMDRmeanSurfDisp::pre_force(int)
       double k1 = history[k_MDR_offset_1];
       double dde0;
       double dde1;
-      if ((delta2_offset0 == 0.0 || delta2_offset1 == 0.0) || (a0 == 0.0 && a1 == 0.0)) {
+      if ((a0*h0 == 0.0 && k_BULK0*h_BULK0 == 0.0 && a1*h1 == 0.0 && k_BULK1*h_BULK1 == 0.0) || (F0old == 0.0 && F1old == 0.0)) {
+        //std::cout << "Rigid flat placement case 1" << std::endl;
         dde0 = ddelta/2.0;
         dde1 = ddelta/2.0;
-      } else if (a0 == 0.0) {
-        dde0 = ddelta;
-        dde1 = 0.0;
-      } else if (a1 == 0.0){
-        dde0 = 0.0;
-        dde1 = ddelta;
+      } else if ((a0*h0 == 0.0 && k_BULK0*h_BULK0 == 0.0) || F0old == 0.0) {
+        //std::cout << "Rigid flat placement case 2" << std::endl;
+        dde0 = ddelta/2.0;
+        dde1 = ddelta/2.0;
+      } else if ((a1*h1 == 0.0 && k_BULK1*h_BULK1 == 0.0) || F1old == 0.0){
+        //std::cout << "Rigid flat placement case 3" << std::endl;
+        dde0 = ddelta/2.0;
+        dde1 = ddelta/2.0;
       } else {
+        //std::cout << "Rigid flat placement case 4" << std::endl;
         dde0 = -((F0old - F1old - a1*ddelta*k1*h1 - ddelta*h_BULK1*k_BULK1)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
         dde1 = -((F1old - F0old - a0*ddelta*k0*h0 - ddelta*h_BULK0*k_BULK0)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
       }
+      //if (abs(dde0) > abs(ddelta) ||  abs(dde1) > abs(ddelta)) {
+      //  dde0 = ddelta/2.0;
+      //  dde1 = ddelta/2.0;
+      //}
+
       //(delta2_offset0 == 0.0 || a0 == 0.0 || a1 == 0.0) ? dde0 = ddelta/2.0 : dde0 = -((F0old - F1old - a1*ddelta*k1*h1 - ddelta*h_BULK1*k_BULK1)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
       //(delta2_offset1 == 0.0 || a0 == 0.0 || a1 == 0.0) ? dde1 = ddelta/2.0 : dde1 = -((F1old - F0old - a0*ddelta*k0*h0 - ddelta*h_BULK0*k_BULK0)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
       //(*delta2_offset0 == 0.0) ? dde0 = ddelta/2.0 : dde0 = -((F0old - F1old - a1*ddelta*k1*h1)/(a0*k0*h0 + a1*k1*h1));

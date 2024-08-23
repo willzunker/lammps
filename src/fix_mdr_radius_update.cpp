@@ -209,7 +209,7 @@ void FixMDRradiusUpdate::end_of_step()
 
     const double dR = std::max(dRnumerator[i]/(dRdenominator[i] - 4.0*M_PI*pow(R,2.0)),0.0);
     if (psi_b[i] < psi[i]) { 
-      radius[i] += dR;
+      //radius[i] += dR;
     }
 
       //if (dR > 1e-7) {

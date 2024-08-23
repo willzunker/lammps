@@ -86,8 +86,8 @@ fix topAtom_Iload topAtom move linear ${vel_neg} 0.0 0.0
 run ${stepsIload} upto
 
 unfix topAtom_Iload
-fix topAtom_Iunload topAtom move linear ${vel} 0.0 0.0   
-#run 14
+fix topAtom_Iunload topAtom move linear ${vel} 0.0 0.0  
+#run 114
 run ${stepsIunload} upto
 
 #unfix topAtom_Iunload

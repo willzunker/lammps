@@ -19,7 +19,7 @@ create_box 2 simBox
 
 pair_style granular
 # E, nu, Y, gamma, psi_b, CoR
-pair_coeff * * mdr 1e6 0.3 5e4 1000 0.08 1.0 tangential linear_nohistory 0.0 0.0
+pair_coeff * * mdr 1e6 0.3 5e4 0.0 0.08 1.0 tangential linear_nohistory 0.0 0.0
 
 ##################################### INSERT PARTICLES ####################################################
 
@@ -85,10 +85,10 @@ fix log all print 1 "${del},${fx2}" file twoParticleDR_2.csv title "del,fx2" scr
 fix topAtom_Iload topAtom move linear ${vel_neg} 0.0 0.0  
 run ${stepsIload} upto
 
-unfix topAtom_Iload
-fix topAtom_Iunload topAtom move linear ${vel} 0.0 0.0  
+#unfix topAtom_Iload
+#fix topAtom_Iunload topAtom move linear ${vel} 0.0 0.0  
 #run 114
-run ${stepsIunload} upto
+#run ${stepsIunload} upto
 
 #unfix topAtom_Iunload
 #unfix xnegAtom_Iunload

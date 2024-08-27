@@ -434,10 +434,7 @@ void Modify::post_neighbor()
 
 void Modify::pre_force(int vflag)
 {
-  for (int i = 0; i < n_pre_force; i++) {
-    assert(fix[list_pre_force[i]]!=nullptr);
-     fix[list_pre_force[i]]->pre_force(vflag);
-  }
+  for (int i = 0; i < n_pre_force; i++) fix[list_pre_force[i]]->pre_force(vflag);
 }
 /* ----------------------------------------------------------------------
    pre_reverse call, only for relevant fixes

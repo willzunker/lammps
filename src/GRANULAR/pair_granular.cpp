@@ -545,7 +545,7 @@ void PairGranular::init_style()
 
     // Initiate MDR radius update fix
     modify->add_fix("fix_mdr_radius_update all mdr/radius/update");
-    //modify->add_fix("fix_mdr_mean_surf_disp all mdr/mean/surf/disp");
+    modify->add_fix("fix_mdr_mean_surf_disp all mdr/mean/surf/disp");
 
     //const char * id_ifx = "my_id";
     //fix_store = dynamic_cast<FixStoreAtom *>(modify->add_fix(fmt::format("{} {} STORE/ATOM 6 0 1 1", id_fix, group->names[igroup])));

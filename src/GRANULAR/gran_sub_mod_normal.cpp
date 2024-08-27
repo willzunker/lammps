@@ -400,7 +400,7 @@ GranSubModNormalMDR::GranSubModNormalMDR(GranularModel *gm, LAMMPS *lmp) :
 {
   num_coeffs = 6; // Young's Modulus, Poisson's ratio, yield stress, effective surface energy, psi_b, coefficent of restitution
   contact_radius_flag = 1;
-  size_history = 39; 
+  size_history = 43; 
 
   nondefault_history_transfer = 1;
   transfer_history_factor = new double[size_history];
@@ -508,6 +508,11 @@ double GranSubModNormalMDR::calculate_forces()
   const int k_BULK_offset_1 = 36;
   const int k_MDR_offset_0 = 37;
   const int k_MDR_offset_1 = 38; 
+  const int deltap_offset_0 = 39;
+  const int deltap_offset_1 = 40;
+  const int amax_offset_0 = 41;
+  const int amax_offset_1 = 42;
+
 
   // initialize particle history variables 
   int tmp1, tmp2;
@@ -595,23 +600,44 @@ double GranSubModNormalMDR::calculate_forces()
   *k_MDR_offset1 = 2*E/(1.0-pow(nu,2.0));
   double dde0;
   double dde1;
-  if ((a0*h0 == 0.0 && k_BULK0*h_BULK0 == 0.0 && a1*h1 == 0.0 && k_BULK1*h_BULK1 == 0.0) || (F0old == 0.0 && F1old == 0.0)) {
-    //std::cout << "Rigid flat placement case 1" << std::endl;
-    dde0 = ddelta/2.0;
-    dde1 = ddelta/2.0;
-  } else if ((a0*h0 == 0.0 && k_BULK0*h_BULK0 == 0.0) || F0old == 0.0) {
-    //std::cout << "Rigid flat placement case 2" << std::endl;
-    dde0 = ddelta/2.0;
-    dde1 = ddelta/2.0;
-  } else if ((a1*h1 == 0.0 && k_BULK1*h_BULK1 == 0.0) || F1old == 0.0){
-    //std::cout << "Rigid flat placement case 3" << std::endl;
+
+  double * amax_offset0 = & history[amax_offset_0];
+  double * amax_offset1 = & history[amax_offset_1];
+  double amax0 = *amax_offset0;
+  double amax1 = *amax_offset1;
+  std::cout << "Normal model - a0 " << a0 << ", a1 " << a1 << ", amax0 " << amax0 << ", amax1 " << amax1 << std::endl;
+  a0 = amax0;
+  a1 = amax1;
+
+   
+
+  if (amax0 == 0.0 || amax1 == 0.0) {
+    std::cout << "amax is zero - amax0 " << amax0 << ", amax1 " << amax1 << std::endl;
     dde0 = ddelta/2.0;
     dde1 = ddelta/2.0;
   } else {
-    //std::cout << "Rigid flat placement case 4" << std::endl;
-    dde0 = -((F0old - F1old - a1*ddelta*k1*h1 - ddelta*h_BULK1*k_BULK1)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
-    dde1 = -((F1old - F0old - a0*ddelta*k0*h0 - ddelta*h_BULK0*k_BULK0)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
+    dde0 = -((F0old - F1old - a1*ddelta*k1*h1)/(a0*k0*h0 + a1*k1*h1));
+    dde1 = -((F1old - F0old - a0*ddelta*k0*h0)/(a0*k0*h0 + a1*k1*h1));
   }
+
+
+  //if ((a0*h0 == 0.0 && k_BULK0*h_BULK0 == 0.0 && a1*h1 == 0.0 && k_BULK1*h_BULK1 == 0.0) || (F0old == 0.0 && F1old == 0.0)) {
+  //  //std::cout << "Rigid flat placement case 1" << std::endl;
+  //  dde0 = ddelta/2.0;
+  //  dde1 = ddelta/2.0;
+  //} else if ((a0*h0 == 0.0 && k_BULK0*h_BULK0 == 0.0) || F0old == 0.0) {
+  //  //std::cout << "Rigid flat placement case 2" << std::endl;
+  //  dde0 = ddelta/2.0;
+  //  dde1 = ddelta/2.0;
+  //} else if ((a1*h1 == 0.0 && k_BULK1*h_BULK1 == 0.0) || F1old == 0.0){
+  //  //std::cout << "Rigid flat placement case 3" << std::endl;
+  //  dde0 = ddelta/2.0;
+  //  dde1 = ddelta/2.0;
+  //} else {
+  //  //std::cout << "Rigid flat placement case 4" << std::endl;
+  //  dde0 = -((F0old - F1old - a1*ddelta*k1*h1 - ddelta*h_BULK1*k_BULK1)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
+  //  dde1 = -((F1old - F0old - a0*ddelta*k0*h0 - ddelta*h_BULK0*k_BULK0)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
+  //}
   //if (abs(dde0) > abs(ddelta) ||  abs(dde1) > abs(ddelta)) {
   //  dde0 = ddelta/2.0;
   //  dde1 = ddelta/2.0;
@@ -627,9 +653,12 @@ double GranSubModNormalMDR::calculate_forces()
   //std::cout << "Normal model: " << gm->delta << ", " << ddelta << ", " << gm->radi << ", " << gm->radj << " | delta: " << delta0 << ", " << delta1 << " | delta2_offset: " << *delta2_offset0 << ", " << *delta2_offset1 << "| dde: " << dde0 << ", " << dde1 << ", " << (dde0 + dde1) << "| Fold: " << F0old << ", " << F1old << " | a: " << a0 << ", " << a1 << " | h: " << h0 << ", " << h1 << " | k_BULK: " << k_BULK0 << ", " << k_BULK1 << " | h_BULK: " << h_BULK0 << ", " << h_BULK1 << std::endl;
   //}
   *delta2_offset0 = delta0;
-  *delta2_offset1 = delta1;
-
+  *delta2_offset1 = delta1; 
   
+  double * deltap_offset0 = & history[deltap_offset_0];
+  double * deltap_offset1 = & history[deltap_offset_1];
+  double deltap0 = *deltap_offset0;
+  double deltap1 = *deltap_offset1;
 
   double * deltamax_offset = & history[deltamax_offset_];
   if (gm->delta > *deltamax_offset) *deltamax_offset = gm->delta;
@@ -657,6 +686,7 @@ double GranSubModNormalMDR::calculate_forces()
     double * deltae1D_offset;
     double * h_BULK_offset;
     double * k_BULK_offset;
+    double * deltap_offset;
 
     if (contactSide == 0) {
       if (gm->contact_type == PAIR) {
@@ -674,6 +704,7 @@ double GranSubModNormalMDR::calculate_forces()
 
         
         delta = delta0;
+        //delta = 1.0/2.0*(gm->delta + deltap0 - deltap1);
 
         //if (Yflag0 == 0.0 && Yflag1 == 0.0) {
         //  double deltaOpt1 = gm->delta*R0/(R0+R1);
@@ -726,6 +757,7 @@ double GranSubModNormalMDR::calculate_forces()
       deltae1D_offset = & history[deltae1D_offset_0];
       h_BULK_offset = & history[h_BULK_offset_0];
       k_BULK_offset = & history[k_BULK_offset_0];
+      deltap_offset = & history[deltap_offset_0];
     } else {
       if (gm->contact_type != PAIR) break; // contact with particle-wall requires only one evaluation
       gm->i = std::min(i_true,j_true);
@@ -739,6 +771,7 @@ double GranSubModNormalMDR::calculate_forces()
       }
 
       delta = delta1;
+      //delta = 1.0/2.0*(gm->delta + deltap1 - deltap0);
 
       //if (Yflag0 == 0.0 && Yflag1 == 0.0) {
       //  double deltaOpt1 = gm->delta*R0/(R0+R1);
@@ -791,6 +824,7 @@ double GranSubModNormalMDR::calculate_forces()
       deltae1D_offset = & history[deltae1D_offset_1];
       h_BULK_offset = & history[h_BULK_offset_1];
       k_BULK_offset = & history[k_BULK_offset_1];
+      deltap_offset = & history[deltap_offset_1];
     }
 
     //delta = gm->delta;
@@ -883,7 +917,14 @@ double GranSubModNormalMDR::calculate_forces()
       const double zR = R - (deltamax_MDR - deltae1Dmax); // depth of particle center
       deltaR = (Fmax*(2*pow(amax,2.0)*(-1 + nu) - (-1 + 2*nu)*zR*(-zR + sqrt(pow(amax,2.0) + pow(zR,2.0)))))/((M_PI*pow(amax,2.0))*2*G*sqrt(pow(amax,2.0) + pow(zR,2.0))); 
       deltae1D = (delta_MDR - deltamax_MDR + deltae1Dmax + deltaR)/(1 + deltaR/deltae1Dmax);  // transformed elastic displacement 
+      
+      // added for rigid flat placement
+      if (delta_MDR == deltamax_MDR) *deltap_offset = deltamax_MDR - (deltae1D + deltaR);
+      //std::cout << *deltap_offset << std::endl;
     }
+
+    // added for rigid flat placement
+    (contactSide == 0) ? *amax_offset0 = amax : *amax_offset1 = amax;
 
     double ddeltae1D = deltae1D - *deltae1D_offset;
     *deltae1D_offset = deltae1D;
@@ -912,7 +953,7 @@ double GranSubModNormalMDR::calculate_forces()
         (deltae1D <= 0.0) ? F_MDR = 0.0 : F_MDR = Eeff*(A*B/4.0)*(acos(1.0 - 2.0*deltae1D/A) - (1.0 - 2.0*deltae1D/A)*sqrt(4.0*deltae1D/A - 4.0*pow(deltae1D,2.0)/pow(A,2.0))); 
         if ( std::isnan(F_MDR) ) {
            std::cout << "F_MDR is NaN, case 1: no tensile springs" << std::endl;
-           std::cout << "Normal model: " << gm->delta << ", " << ddelta << ", " << gm->radi << ", " << gm->radj << " | delta: " << delta0 << ", " << delta1 << " | delta2_offset: " << *delta2_offset0 << ", " << *delta2_offset1 << "| dde: " << dde0 << ", " << dde1 << "| Fold: " << F0old << ", " << F1old << " | a: " << a0 << ", " << a1 << " | k_BULK: " << k_BULK0 << ", " << k_BULK1 << " | h_BULK: " << h_BULK0 << ", " << h_BULK1 << std::endl;
+           //std::cout << "Normal model: " << gm->delta << ", " << ddelta << ", " << gm->radi << ", " << gm->radj << " | delta: " << delta0 << ", " << delta1 << " | delta2_offset: " << *delta2_offset0 << ", " << *delta2_offset1 << "| dde: " << dde0 << ", " << dde1 << "| Fold: " << F0old << ", " << F1old << " | a: " << a0 << ", " << a1 << " | k_BULK: " << k_BULK0 << ", " << k_BULK1 << " | h_BULK: " << h_BULK0 << ", " << h_BULK1 << std::endl;
            std::cout << "i_true: " << i_true << "j_true: " << j_true << "deltae1D: " << deltae1D << ", A: " << A << ", B:" << B << ", amax:" << amax << ", deltamax_MDR" << deltamax_MDR << ", R:" << R << std::endl;
            std::exit(1);
         }
@@ -1072,7 +1113,7 @@ double GranSubModNormalMDR::calculate_forces()
       (deltae1D <= 0.0) ? F_MDR = 0.0 : F_MDR = Eeff*(A*B/4.0)*(acos(1.0 - 2.0*deltae1D/A) - (1.0 - 2.0*deltae1D/A)*sqrt(4.0*deltae1D/A - 4.0*pow(deltae1D,2.0)/pow(A,2.0))); 
       if ( std::isnan(F_MDR) ) {
         std::cout << "F_MDR is NaN, non-adhesive case" << std::endl;
-        std::cout << "Normal model: " << gm->delta << ", " << ddelta << ", " << gm->radi << ", " << gm->radj << " | delta: " << delta0 << ", " << delta1 << " | delta2_offset: " << *delta2_offset0 << ", " << *delta2_offset1 << "| dde: " << dde0 << ", " << dde1 << "| Fold: " << F0old << ", " << F1old << " | a: " << a0 << ", " << a1 << " | k_BULK: " << k_BULK0 << ", " << k_BULK1 << " | h_BULK: " << h_BULK0 << ", " << h_BULK1 << std::endl;
+        //std::cout << "Normal model: " << gm->delta << ", " << ddelta << ", " << gm->radi << ", " << gm->radj << " | delta: " << delta0 << ", " << delta1 << " | delta2_offset: " << *delta2_offset0 << ", " << *delta2_offset1 << "| dde: " << dde0 << ", " << dde1 << "| Fold: " << F0old << ", " << F1old << " | a: " << a0 << ", " << a1 << " | k_BULK: " << k_BULK0 << ", " << k_BULK1 << " | h_BULK: " << h_BULK0 << ", " << h_BULK1 << std::endl;
         std::cout << "i_true: " << i_true << "j_true: " << j_true << "deltae1D: " << deltae1D << ", A: " << A << ", B:" << B << ", amax:" << amax << ", deltamax_MDR" << deltamax_MDR << ", R:" << R << std::endl;
         std::exit(1);
       } 
@@ -1198,11 +1239,11 @@ double GranSubModNormalMDR::calculate_forces()
   if (gm->contact_type != PAIR) {
     F = wij*F0*wallForceMagnifer;
   } else {
-    F = wij*(F0 + F1)/2; 
+    F = wij*(F0 + F1)/2.0; 
     //if (R0 <  R1) {
     //  double b = pow(R1/R0,0.65);
     //  F = wij*F0; // wij*(F0 + F1/b)/2; //
-    //  //F = wij*F0;
+    //  F = wij*F0;
     //  //std::cout << "Number 1: " << F << ", " << F0 << ", " << F1 << " | " << R0 << ", " << R1 << ", " << b << std::endl; 
     //} else {
     //  double b = pow(R1/R0,0.65);

@@ -35,6 +35,7 @@
 #include "region.h"
 #include "fix_wall_gran_region.h"
 #include <iostream>
+#include <algorithm>
 
 using namespace LAMMPS_NS;
 using namespace FixConst;

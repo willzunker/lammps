@@ -27,7 +27,7 @@ variable YoungsModulus equal 1e9
 variable PoissonsRatio equal 0.3
 variable YieldStress equal 50e6
 variable SurfaceEnergy equal 0.0
-variable psi_b equal 0.6
+variable psi_b equal 0.55
 variable CoR equal 0.5
 variable kt equal 2/7*${YoungsModulus}*${atomRadius}
 variable xgammat equal 0.0

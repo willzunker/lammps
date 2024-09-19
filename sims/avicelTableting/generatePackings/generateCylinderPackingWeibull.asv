@@ -13,11 +13,13 @@ cylSize = [cyl_r,cyl_h];
 cylCenter = [0,0,cyl_h/2];
 
 % define number of particles and their radii
-N_goal = 500;  % goal for number of particles to insert
-R_mean = 0.4e-3;   % average sphere radius
-R_std = R_mean/20;   % standard deviation of sphere radius
+N_goal = 350;  % goal for number of particles to insert
+R_avg = 0.4e-3;   % average sphere radius
+R_min = R_avg/2;
+R_max = R_avg*2;
+R_factor = 2*R_avg/60e-6;
 
-[sphereCenters, sphereRadii] = placeCylSpheres(cylSize, cylCenter, N_goal, R_mean, R_std);
+[sphereCenters, sphereRadii] = placeCylSpheresWeibull(cylSize, cylCenter, N_goal, R_factor, R_min, R_max);
 
 % define properties needed for writing data file 
 filename = '../spheres.data';
@@ -30,5 +32,5 @@ atoms = horzcat(id,atom_type,2*sphereRadii,sphereDensities,sphereCenters);
 simBox = [-5e-3 5e-3 -5e-3 5e-3 0 2e-2];
 writeFirstDataFile(filename,N_goal,atom_types,simBox,atoms)
 
-
+plotWeibullDistribution(sphereRadii,R_factor)
 

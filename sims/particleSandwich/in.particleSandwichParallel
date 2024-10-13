@@ -8,6 +8,7 @@ newton off
 neighbor      6 bin
 neigh_modify  delay 0
 timestep 0.001
+processors 2 1 1
 
 ######################### SIMULATION BOUNDING BOX, INTEGRATION, AND, GRAVITY ###########################
 
@@ -67,23 +68,23 @@ variable stepsIIunload equal  round(${stepsIIload}+${deltaII}/${ddelta})
 variable stepsIIIload equal   round(${stepsIIunload}+${deltaIII}/${ddelta})
 variable stepsIIIunload equal round(${stepsIIIload}+${deltaIII}/${ddelta}) 
 variable stepsIVload equal    round(${stepsIIIunload}+${deltaIV}/${ddelta})
-variable stepsIVunload equal  round(${stepsIVload}+${deltaIV}/${ddelta})  
+variable stepsIVunload equal  round(${stepsIVload}+${deltaIV}/${ddelta}) 
 
 ##################################### SET UP DUMP OUTPUTS  ####################################################
 
 #dump dumpParticles all vtk 1 post/particles_*.vtk x y z fx fy fz 
-dump dumpParticles all custom 10 particleSandwich.dump id type mass diameter x y z fx fy fz
+dump dumpParticles all custom 10 particleSandwichParallel.dump id type mass diameter x y z fx fy fz
 variable x2 equal x[2]
 variable x1 equal x[1]
 variable del equal ${d}-(x[2]-x[1])
 variable fx2 equal fx[2]
-fix log all print 1 "${del},${fx2}" file particleSandwich.csv title "del,fx2" screen no
+fix log all print 1 "${del},${fx2}" file particleSandwichParallel.csv title "del,fx2" screen no
 
 ######################################### BEGIN RUN  ##########################################################
 
 fix xposAtom_Iload xposAtom move linear ${vel_neg} 0.0 0.0  
 fix xnegAtom_Iload xnegAtom move linear ${vel} 0.0 0.0 
-run ${stepsIload} upto
+run  ${stepsIload} upto
 
 unfix xposAtom_Iload
 unfix xnegAtom_Iload

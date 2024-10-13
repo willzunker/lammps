@@ -539,7 +539,7 @@ void PairGranular::init_style()
     index_contacts = atom->find_custom("contacts",tmp1,tmp2);                     // total contacts on particle 
     index_adhesive_length = atom->find_custom("adhesive_length",tmp1,tmp2);       // total contacts on particle
 
-     std::cout << "MDR history variables have been initialized 2" << std::endl;
+     std::cout << "MDR history variables have been initialized 2" << ", " << index_Ro << std::endl;
 
     //index_volSums = atom->find_custom("volSums",tmp1,tmp2);
 

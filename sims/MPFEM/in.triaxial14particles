@@ -1,6 +1,6 @@
 ############################### SIMULATION SETTINGS ###################################################
 
-atom_style      sphere 
+atom_style      sphere 1 
 atom_modify     map array 
 comm_modify vel yes
 units           si
@@ -8,6 +8,7 @@ newton          off
 neighbor        2 bin
 neigh_modify    delay 0
 timestep        1e-6
+#processors 1 2 1
 
 ######################### SIMULATION BOUNDING BOX, INTEGRATION, AND, GRAVITY ###########################
 
@@ -27,7 +28,7 @@ variable YoungsModulus equal 1e9
 variable PoissonsRatio equal 0.3
 variable YieldStress equal 50e6
 variable SurfaceEnergy equal 0.0
-variable psi_b equal 0.55
+variable psi_b equal 0.5
 variable CoR equal 0.5
 variable kt equal 2/7*${YoungsModulus}*${atomRadius}
 variable xgammat equal 0.0

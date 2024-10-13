@@ -8,6 +8,7 @@ newton off
 neighbor      6 bin
 neigh_modify  delay 0
 timestep 0.001
+processors 2 1 1
 
 ######################### SIMULATION BOUNDING BOX, INTEGRATION, AND, GRAVITY ###########################
 
@@ -19,21 +20,23 @@ create_box 2 simBox
 
 pair_style granular
 # E, nu, Y, gamma, psi_b, CoR
-pair_coeff * * mdr 1e6 0.3 5e4 0.0 0.08 1.0 tangential linear_nohistory 0.0 0.0
+pair_coeff * * mdr 5e8 0.3 25e6 0.0 0.78 1.0 tangential linear_nohistory 0.0 0.0
 
 ##################################### INSERT PARTICLES ####################################################
 
 create_atoms 1 single 0 0 0 units box
-group botAtom id 1
-variable dbot equal 2.66
+group centerAtom id 1
+variable d equal 20
 variable den equal 1000
-set atom 1 diameter ${dbot} density ${den} 
+set atom 1 diameter ${d} density ${den} 
 
-variable dtop equal 2
-variable xo_top equal (${dbot}+${dtop})/2
-create_atoms 1 single ${xo_top} 0 0 units box
-group topAtom id 2
-set atom 2 diameter ${dtop} density ${den} 
+create_atoms 1 single -20 0 0 units box
+group xnegAtom id 2
+set atom 2 diameter ${d} density ${den} 
+
+create_atoms 1 single 20 0 0 units box
+group xposAtom id 3
+set atom 3 diameter ${d} density ${den} 
 
 ######################################## SCREEN OUTPUT  ####################################################
 
@@ -48,7 +51,7 @@ thermo_modify lost ignore norm no
 variable mydt equal dt
 variable mystep equal step
 variable mytime equal ${mydt}*v_mystep
-variable ddelta equal ${dtop}/2000
+variable ddelta equal ${d}/200
 variable slope equal ${ddelta}/${mydt}
 variable disp equal ${slope}*v_mytime
 variable disp_neg equal -v_disp
@@ -56,74 +59,77 @@ variable vel equal ${ddelta}/${mydt}
 variable vel_neg equal -${vel}
 variable zeroDisp equal 0.0
 
-variable deltaI     equal 0.6
+variable deltaI     equal 6.25 #1.25
 variable deltaII    equal 3.0
 variable deltaIII   equal 4.75
 variable deltaIV    equal 6.25
 
-variable stepsIload equal ${deltaI}/${ddelta}
-variable stepsIunload equal ${stepsIload}+${deltaI}/${ddelta} 
-variable stepsIIload equal ${stepsIunload}+${deltaII}/${ddelta}
-variable stepsIIunload equal ${stepsIIload}+${deltaII}/${ddelta} 
-variable stepsIIIload equal ${stepsIIunload}+${deltaIII}/${ddelta}
-variable stepsIIIunload equal ${stepsIIIload}+${deltaIII}/${ddelta} 
-variable stepsIVload equal ${stepsIIIunload}+${deltaIV}/${ddelta}
-variable stepsIVunload equal ${stepsIVload}+${deltaIV}/${ddelta} 
+variable stepsIload equal     round(${deltaI}/${ddelta})
+variable stepsIunload equal   round(${stepsIload}+${deltaI}/${ddelta}) 
+variable stepsIIload equal    round(${stepsIunload}+${deltaII}/${ddelta})
+variable stepsIIunload equal  round(${stepsIIload}+${deltaII}/${ddelta}) 
+variable stepsIIIload equal   round(${stepsIIunload}+${deltaIII}/${ddelta})
+variable stepsIIIunload equal round(${stepsIIIload}+${deltaIII}/${ddelta}) 
+variable stepsIVload equal    round(${stepsIIIunload}+${deltaIV}/${ddelta})
+variable stepsIVunload equal  round(${stepsIVload}+${deltaIV}/${ddelta}) 
 
-fix cAtom botAtom move variable v_zeroDisp NULL NULL NULL NULL NULL units box 
+fix cAtom centerAtom move variable v_zeroDisp NULL NULL NULL NULL NULL units box 
 
 ##################################### SET UP DUMP OUTPUTS  ####################################################
 
-dump dumpParticles all vtk 20 post/particle_2_*.vtk x y z fx fy fz radius
-variable x2 equal x[2]
-variable del equal (${dtop}+${dbot})/2-x[2]
-variable fx2 equal fx[2]
-fix log all print 1 "${del},${fx2}" file twoParticleDR_2.csv title "del,fx2" screen no
+#dump dumpParticles all vtk 1 post/particles_*.vtk x y z fx fy fz 
+dump dumpParticles all custom 10 particleSandwichParallel.dump id type mass diameter x y z fx fy fz 
+variable x3 equal x[3]
+variable x1 equal x[1]
+variable del equal ${d}-(x[3]-x[1])
+variable fx3 equal fx[3]
+fix log all print 1 "${del},${fx3}" file particleSandwichParallel.csv title "del,fx3" screen no
 
 ######################################### BEGIN RUN  ##########################################################
 
-fix topAtom_Iload topAtom move linear ${vel_neg} 0.0 0.0  
-#run 427
+fix xposAtom_Iload xposAtom move linear ${vel_neg} 0.0 0.0  
+fix xnegAtom_Iload xnegAtom move linear ${vel} 0.0 0.0 
 run ${stepsIload} upto
 
-unfix topAtom_Iload
-fix topAtom_Iunload topAtom move linear ${vel} 0.0 0.0  
-#run 114
-run ${stepsIunload} upto
-
-#unfix topAtom_Iunload
+#unfix xposAtom_Iload
+#unfix xnegAtom_Iload
+#fix xposAtom_Iunload xposAtom move linear ${vel} 0.0 0.0  
+#fix xnegAtom_Iunload xnegAtom move linear ${vel_neg} 0.0 0.0 
+#run ${stepsIunload} upto
+#
+#unfix xposAtom_Iunload
 #unfix xnegAtom_Iunload
-#fix topAtom_IIload topAtom move linear ${vel_neg} 0.0 0.0  
+#fix xposAtom_IIload xposAtom move linear ${vel_neg} 0.0 0.0  
 #fix xnegAtom_IIload xnegAtom move linear ${vel} 0.0 0.0 
 #run ${stepsIIload} upto
 #
-#unfix topAtom_IIload
+#unfix xposAtom_IIload
 #unfix xnegAtom_IIload
-#fix topAtom_IIunload topAtom move linear ${vel} 0.0 0.0  
+#fix xposAtom_IIunload xposAtom move linear ${vel} 0.0 0.0  
 #fix xnegAtom_IIunload xnegAtom move linear ${vel_neg} 0.0 0.0 
 #run ${stepsIIunload} upto
 #
-#unfix topAtom_IIunload
+#unfix xposAtom_IIunload
 #unfix xnegAtom_IIunload
-#fix topAtom_IIIload topAtom move linear ${vel_neg} 0.0 0.0  
+#fix xposAtom_IIIload xposAtom move linear ${vel_neg} 0.0 0.0  
 #fix xnegAtom_IIIload xnegAtom move linear ${vel} 0.0 0.0 
 #run ${stepsIIIload} upto
 #
-#unfix topAtom_IIIload
+#unfix xposAtom_IIIload
 #unfix xnegAtom_IIIload
-#fix topAtom_IIIunload topAtom move linear ${vel} 0.0 0.0  
+#fix xposAtom_IIIunload xposAtom move linear ${vel} 0.0 0.0  
 #fix xnegAtom_IIIunload xnegAtom move linear ${vel_neg} 0.0 0.0 
 #run ${stepsIIIunload} upto
 #
-#unfix topAtom_IIIunload
+#unfix xposAtom_IIIunload
 #unfix xnegAtom_IIIunload
-#fix topAtom_IVload topAtom move linear ${vel_neg} 0.0 0.0  
+#fix xposAtom_IVload xposAtom move linear ${vel_neg} 0.0 0.0  
 #fix xnegAtom_IVload xnegAtom move linear ${vel} 0.0 0.0 
 #run ${stepsIVload} upto
 #
-#unfix topAtom_IVload
+#unfix xposAtom_IVload
 #unfix xnegAtom_IVload
-#fix topAtom_IVunload topAtom move linear ${vel} 0.0 0.0  
+#fix xposAtom_IVunload xposAtom move linear ${vel} 0.0 0.0  
 #fix xnegAtom_IVunload xnegAtom move linear ${vel_neg} 0.0 0.0 
 #run ${stepsIVunload} upto
 

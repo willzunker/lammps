@@ -25,11 +25,16 @@ FixStyle(mdr/mean/surf/disp,FixMDRmeanSurfDisp);
 namespace LAMMPS_NS {
 
 class FixMDRmeanSurfDisp : public Fix {
- public:
+ public:           
+  double * Acon0; 
+  double * ddelta_bar;
+  
   FixMDRmeanSurfDisp(class LAMMPS *, int, char **);
   int setmask() override;
   void setup_pre_force(int) override;
   void pre_force(int) override; // FOR MDR
+  int pack_forward_comm(int, int *, double *, int, int *) override;
+  void unpack_forward_comm(int, int, double *) override;
 
  private:
 

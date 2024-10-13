@@ -1,6 +1,6 @@
 ############################### SIMULATION SETTINGS ###################################################
 
-atom_style sphere 
+atom_style sphere 1
 atom_modify map array 
 comm_modify vel yes
 units si
@@ -12,7 +12,7 @@ timestep 0.001
 ######################### SIMULATION BOUNDING BOX, INTEGRATION, AND, GRAVITY ###########################
 
 boundary f f f
-region simBox block -3000 3000 -3000 3000 -3000 3000
+region simBox block -50 50 -50 50 -50 50
 create_box 2 simBox
 
 ########################### PARTICLE MATERIAL PROPERTIES AND FORCE MODEL ###############################
@@ -25,7 +25,7 @@ pair_coeff * * mdr 1e6 0.3 5e4 0.0 0.08 1.0 tangential linear_nohistory 0.0 0.0
 
 create_atoms 1 single 0 0 0 units box
 group botAtom id 1
-variable dbot equal 2000
+variable dbot equal 20
 variable den equal 1000
 set atom 1 diameter ${dbot} density ${den} 
 
@@ -39,7 +39,7 @@ set atom 2 diameter ${dtop} density ${den}
 
 compute       1 all erotate/sphere
 thermo_style  custom dt step atoms ke c_1 vol 
-thermo        1000
+thermo        1
 thermo_modify lost ignore norm no
 
 ##################################### DEFINE RUN CONTROL VARIBLES  #############################################
@@ -56,7 +56,7 @@ variable vel equal ${ddelta}/${mydt}
 variable vel_neg equal -${vel}
 variable zeroDisp equal 0.0
 
-variable deltaI     equal 0.6
+variable deltaI     equal 1.3
 variable deltaII    equal 3.0
 variable deltaIII   equal 4.75
 variable deltaIV    equal 6.25
@@ -74,7 +74,8 @@ fix cAtom botAtom move variable v_zeroDisp NULL NULL NULL NULL NULL units box
 
 ##################################### SET UP DUMP OUTPUTS  ####################################################
 
-dump dumpParticles all vtk 20 post/particle_5_*.vtk x y z fx fy fz radius
+#dump dumpParticles all vtk 20 post/particle_5_*.vtk x y z fx fy fz radius
+dump dumpParticles all custom 10 particle_5.dump id type x y z fx fy fz radius
 variable x2 equal x[2]
 variable del equal (${dtop}+${dbot})/2-x[2]
 variable fx2 equal fx[2]

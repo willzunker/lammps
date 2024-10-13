@@ -1,14 +1,14 @@
 ############################### SIMULATION SETTINGS ###################################################
 
-atom_style sphere 
+atom_style sphere 1
 atom_modify map array 
 comm_modify vel yes
 units si
 newton off
-neighbor      1.4e-3 bin
-neigh_modify every 10 delay 1000 check yes 
-timestep 1.75e-7
-#processors 3 3 1
+neighbor      1.2e-3 bin
+neigh_modify every 10 delay 2000 check no 
+timestep 1.25e-7
+processors 2 2 1
 
 ######################### SIMULATION BOUNDING BOX, INTEGRATION, AND, GRAVITY ###########################
 
@@ -17,7 +17,7 @@ read_data spheres.data
 
 ######################################### ADD DIE AND ATOM PARAMETERIZATION ##############################################
 
-variable atomRadius              equal 0.4e-3
+variable atomRadius              equal 0.37e-3*1.5
 variable atomDiameter            equal 2*${atomRadius}
 variable atomDensity             equal 1560 
 variable dieRadius               equal 4e-3
@@ -28,19 +28,19 @@ variable dieHeight               equal 1e-2
 pair_style granular
 # mdr = E, nu, Y, gamma, psi_b, CoR
 # linear_history = k_t, x_gamma,t, mu_s 
-variable YoungsModulus equal 7.5e9
+variable YoungsModulus equal 8.5e9
 variable PoissonsRatio equal 0.3
 variable YieldStress equal 1.5e8
-variable SurfaceEnergy equal 2000 #220
+variable SurfaceEnergy equal 400 #220
 variable SurfaceEnergyWall equal 0.0
-variable psi_b equal 0.6
-variable CoR equal 0.4
+variable psi_b equal 0.5
+variable CoR equal 0.5
 variable kt equal 2/7*${YoungsModulus}*${atomRadius}
 variable kt_wall equal 2/7*${YoungsModulus}*${atomRadius}
 variable xgammat equal 0.0
 variable mu_s equal 1.0
 variable mu_s_wall equal 0.1
-variable mu_roll equal 0.7
+variable mu_roll equal 0.85
 variable k_roll equal 2.25*${mu_roll}*${mu_roll}*${YoungsModulus}*${atomRadius}
 variable gamma_roll equal 0.0
 
@@ -52,6 +52,8 @@ pair_coeff * * mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEne
 
 variable disp_upper equal 0.0
 variable disp_lower equal 0.0
+variable disp_xPlanePos equal 0.0
+variable disp_xPlaneNeg equal 0.0
 
 variable wall_contact_string string "granular mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEnergyWall} ${psi_b} ${CoR} damping none tangential linear_history ${kt_wall} ${xgammat} ${mu_s_wall} rolling sds ${k_roll} ${gamma_roll} ${mu_roll}"
 #variable wall_contact_string string "granular mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEnergyWall} ${psi_b} ${CoR} tangential linear_history ${kt} ${xgammat} ${mu_s} damping none"
@@ -62,15 +64,25 @@ variable dieHeight2 equal 2*${dieHeight}
 region lowerPunch plane 0 0 0 0 0 1 side in units box move NULL NULL v_disp_lower units box
 region upperPunch plane 0 0 ${dieHeight} 0 0 -1 side in move NULL NULL v_disp_upper units box
 region die cylinder z 0 0 ${dieRadius} 0 ${dieHeight2} side in units box
+variable dieRadiusPlus equal ${dieRadius}*1.05
+variable dieRadiusPlusNeg equal -${dieRadiusPlus}
+region xPlanePos plane ${dieRadiusPlus} 0 0 -1 0 0 side in units box move v_disp_xPlanePos NULL NULL units box
+region xPlaneNeg plane ${dieRadiusPlusNeg} 0 0 1 0 0 side in units box move v_disp_xPlaneNeg NULL NULL units box
 
 fix lowerPunch all wall/gran/region ${wall_contact_string} region lowerPunch contacts
 fix upperPunch all wall/gran/region ${wall_contact_string} region upperPunch contacts
 fix die all wall/gran/region ${wall_contact_string} region die contacts 
+fix xPlanePos all wall/gran/region ${wall_contact_string} region xPlanePos contacts
+fix xPlaneNeg all wall/gran/region ${wall_contact_string} region xPlaneNeg contacts
 
 compute avgPunchForce all reduce sum f_upperPunch[4]
 variable avgPunchForce equal c_avgPunchForce
+compute avgLowerPunchForce all reduce sum f_lowerPunch[4]
+variable avgLowerPunchForce equal c_avgLowerPunchForce
+compute fractureForce all reduce sum f_xPlanePos[2]
+variable fractureForce equal c_fractureForce
 
-fix print1 all print 1 "${disp_upper} ${avgPunchForce}" file upperPunchDispForce.csv screen no 
+fix print1 all print 1 "${disp_upper} ${avgPunchForce} ${avgLowerPunchForce} ${fractureForce}" file upperPunchDispForce.csv screen no 
 
 ##################################### INSERT PARTICLES ####################################################
 
@@ -80,7 +92,7 @@ fix grav all gravity 9.81 vector 0 0 -1
 ######################################## SCREEN OUTPUT  ####################################################
 
 compute       1 all erotate/sphere
-thermo_style  custom dt step atoms ke vol
+thermo_style  custom dt step atoms ke vol v_disp_upper
 thermo        100
 thermo_modify lost ignore norm no
 
@@ -88,7 +100,7 @@ thermo_modify lost ignore norm no
 
 compute ke all ke/atom
 variable output_rate equal round(1e-3/dt)
-#variable output_rate equal 100
+#variable output_rate equal 10
 
 #dump 1 all custom 1 uniaxialCompression id type f_plane_yz_neg[*]
 #variable az_upperPunch atom f_upperPunch[7]
@@ -121,13 +133,13 @@ dump dumpParticlesVTK all vtk ${output_rate} post/particles_*.vtk id x y z fx fy
 
 ######################################### RUN SIMULATION ##########################################
 
-variable        upper_punch_stroke equal 0.68*${dieHeight}
+variable        upper_punch_stroke equal 0.691*${dieHeight} # 0.6733
 variable        vel_upper equal 0.25
 
 variable        settling_steps equal round(0.02/dt)
 variable 		compression_steps equal 2*round(${upper_punch_stroke}/${vel_upper}/dt)
 variable        ejection_steps equal ${compression_steps}
-variable        free_float_steps equal round(0.01/dt)
+variable        free_float_steps equal round(0.02/dt)
 variable        total_steps equal ${settling_steps}+${compression_steps}+${ejection_steps}+${free_float_steps}
 
 print "Total steps = ${total_steps}"
@@ -141,7 +153,7 @@ run		        ${settling_steps}
 variable        punch_frequency equal PI/2/(dt*${compression_steps}/2)
 variable        disp_upper equal -${upper_punch_stroke}*sin(${punch_frequency}*elapsed*dt)
 variable        short_release equal round(${compression_steps}*1.0)
-run             ${short_release}
+run             ${short_release} # 189170 upto #
 
 ##### EJECTION #####
 
@@ -154,5 +166,8 @@ run             ${ejection_steps}
 
 variable 		disp_lower equal ${dieHeight}
 variable 		disp_upper equal ${dieHeight}*0.9
+variable        max_disp equal ${dieRadius}*0.75
+#variable        disp_xPlanePos equal -${max_disp}*elapsed/${free_float_steps}
+#variable        disp_xPlaneNeg equal -v_disp_xPlanePos
 run 			${free_float_steps}	
 

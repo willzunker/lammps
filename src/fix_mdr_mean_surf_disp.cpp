@@ -33,7 +33,9 @@
 #include "granular_model.h"
 #include "neigh_list.h"
 #include "region.h"
+#include "update.h"
 #include "fix_wall_gran_region.h"
+#include "comm.h"
 #include <iostream>
 #include <algorithm>
 
@@ -46,7 +48,7 @@ using namespace Granular_NS;
 FixMDRmeanSurfDisp::FixMDRmeanSurfDisp(LAMMPS *lmp, int narg, char **arg) :
     Fix(lmp, narg, arg)
 {
- // nothing to initialize
+ comm_forward = 1; // value needs to match number of values you communicate
 }
 
 // FOR MDR
@@ -60,27 +62,46 @@ int FixMDRmeanSurfDisp::setmask()
 
 void FixMDRmeanSurfDisp::setup_pre_force(int /*vflag*/)
 {
-  pre_force(0);
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixMDRmeanSurfDisp::pre_force(int)
-{
-  //std::cout << " " << std::endl;
-  //std::cout << "New Step" << std::endl;
-
   int tmp1, tmp2;
   int index_Acon0 = atom->find_custom("Acon0",tmp1,tmp2);                 
   int index_ddelta_bar = atom->find_custom("ddelta_bar",tmp1,tmp2);             
-  double * Acon0 = atom->dvector[index_Acon0]; 
-  double * ddelta_bar = atom->dvector[index_ddelta_bar];
+  Acon0 = atom->dvector[index_Acon0]; 
+  ddelta_bar = atom->dvector[index_ddelta_bar];
 
+  pre_force(0);
+}
+
+int FixMDRmeanSurfDisp::pack_forward_comm(int n, int *list, double *buf, int /*pbc_flag*/,int * /*pbc*/)
+{
+  int m = 0;
+  for (int i = 0; i < n; i++) {
+    int j = list[i];
+    buf[m++] = ddelta_bar[j];
+    //buf[m++] = Acon0[j];
+  }
+  return m;
+}
+
+void FixMDRmeanSurfDisp::unpack_forward_comm(int n, int first, double *buf)
+{
+  int m = 0;
+  int last = first + n;
+  for (int i = first; i < last; i++) {
+    ddelta_bar[i] = buf[m++];
+    //Acon0[i] = buf[m++];
+  }
+}
+
+void FixMDRmeanSurfDisp::pre_force(int)
+{
   FixNeighHistory * fix_history = dynamic_cast<FixNeighHistory *>(modify->get_fix_by_id("NEIGH_HISTORY_GRANULAR"));
   PairGranular * pair = dynamic_cast<PairGranular *>(force->pair_match("granular",1));
   NeighList * list = pair->list;
   
   const int size_history = pair->get_size_history();
+  
+  //std::cout << " " << std::endl;
+  //std::cout << "New Step" << std::endl;
 
   {
   int i,j,k,lv1,ii,jj,inum,jnum,itype,jtype,ktype;
@@ -317,153 +338,45 @@ void FixMDRmeanSurfDisp::pre_force(int)
 
       const int delta_offset_0 = 0;           // apparent overlap 
       const int delta_offset_1 = 1;           
-      const int aAdh_offset_0 = 16;           // adhesive contact radius
-      const int aAdh_offset_1 = 17;
       const int Ac_offset_0 = 18;             // contact area
       const int Ac_offset_1 = 19;
-
       const int deltamax_offset_ = 23;
-      const int delta2_offset_ = 24;
-      const int F_offset_0 = 25;
-      const int F_offset_1 = 26;
-      const int delta2_offset_0 = 27;           // apparent overlap 
-      const int delta2_offset_1 = 28; 
-      const int h_offset_0 = 29;
-      const int h_offset_1 = 30;  
-      const int deltae1D_offset_0 = 31;
-      const int deltae1D_offset_1 = 32;  
-      const int h_BULK_offset_0 = 33;
-      const int h_BULK_offset_1 = 34;  
-      const int k_BULK_offset_0 = 35;
-      const int k_BULK_offset_1 = 36; 
-      const int k_MDR_offset_0 = 37;
-      const int k_MDR_offset_1 = 38; 
-      const int deltap_offset_0 = 39;
-      const int deltap_offset_1 = 40;
-      const int amax_offset_0 = 41;
-      const int amax_offset_1 = 42;
-      const int eta_offset_0 = 44;
-      const int eta_offset_1 = 45;
+      const int deltap_offset_0 = 24;
+      const int deltap_offset_1 = 25;
 
-      // More rigid flat placement schemes
       double deltamax = history[deltamax_offset_];
-      double a0 = history[aAdh_offset_0];
-      double a1 = history[aAdh_offset_1];
-      double F0old = history[F_offset_0];
-      double F1old = history[F_offset_1];
-      double h0 = history[h_offset_0];
-      double h1 = history[h_offset_1];
-      h0 = 1.0;
-      h1 = 1.0;
-      double h_BULK0 = history[h_BULK_offset_0];
-      double h_BULK1 = history[h_BULK_offset_1];
-      double k_BULK0 = history[k_BULK_offset_0];
-      double k_BULK1 = history[k_BULK_offset_1];
-      double delta2_offset0 = history[delta2_offset_0];
-      double delta2_offset1 = history[delta2_offset_1];
-      double delta2_offset = history[delta2_offset_];
-      double ddelta = delta - delta2_offset;
-      double k0 = history[k_MDR_offset_0];
-      double k1 = history[k_MDR_offset_1];
-      double dde0;
-      double dde1;
-      double amax0 = history[amax_offset_0];
-      double amax1 = history[amax_offset_1];
-      double eta0 = history[eta_offset_0];
-      double eta1 = history[eta_offset_1];
       double deltap0 = history[deltap_offset_0];
       double deltap1 = history[deltap_offset_1];
-      //a0 = amax0;
-      //a1 = amax1;
-
-      //if (deltamax == 0.0 || (F0old == 0.0 && F1old == 0.0) || (a0 == 0.0 && a1 == 0.0)) {
-      //  //std::cout << "amax is zero - amax0 " << amax0 << ", amax1 " << amax1 << std::endl;
-      //  dde0 = ddelta/2.0;
-      //  dde1 = ddelta/2.0;
-      //} else if ((F0old == 0.0 && ddelta >= 0.0) || (a0 == 0.0 && ddelta >= 0.0)) {
-      //  dde0 = ddelta;
-      //  dde1 = 0.0;
-      //} else if ((F0old == 0.0 && ddelta < 0.0) || (a0 == 0.0 && ddelta < 0.0)) {
-      //  dde0 = 0.0;
-      //  dde1 = ddelta;
-      //} else if ((F1old == 0.0 && ddelta >= 0.0) || (a1 == 0.0 && ddelta >= 0.0)) {
-      //  dde0 = 0.0;
-      //  dde1 = ddelta;
-      //} else if ((F1old == 0.0 && ddelta < 0.0) || (a1 == 0.0 && ddelta < 0.0)) {
-      //  dde0 = ddelta;
-      //  dde1 = 0.0;
-      //} else {
-      //  dde0 = -((F0old - F1old - a1*ddelta*k1*h1 - ddelta*eta1)/(a0*k0*h0 + eta0 + a1*k1*h1 + eta1));
-      //  dde1 = -((F1old - F0old - a0*ddelta*k0*h0 - ddelta*eta0)/(a0*k0*h0 + eta0 + a1*k1*h1 + eta1));
-      //  //dde0 = -((F0old - F1old - a1*ddelta*k1*h1 - ddelta*h_BULK1*k_BULK1)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
-      //  //dde1 = -((F1old - F0old - a0*ddelta*k0*h0 - ddelta*h_BULK0*k_BULK0)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
-      //  //dde0 = -((F0old - F1old - a1*ddelta*k1*h1)/(a0*k0*h0 + a1*k1*h1));
-      //  //dde1 = -((F1old - F0old - a0*ddelta*k0*h0)/(a0*k0*h0 + a1*k1*h1));
-      //}
-      //int i0 = std::max(i,j);
-      //int i1 = std::min(i,j);
-
-      //if ((a0*h0 == 0.0 && k_BULK0*h_BULK0 == 0.0 && a1*h1 == 0.0 && k_BULK1*h_BULK1 == 0.0) || (F0old == 0.0 && F1old == 0.0)) {
-      //  //std::cout << "Rigid flat placement case 1" << std::endl;
-      //  dde0 = ddelta/2.0;
-      //  dde1 = ddelta/2.0;
-      //} else if ((a0*h0 == 0.0 && k_BULK0*h_BULK0 == 0.0) || F0old == 0.0) {
-      //  //std::cout << "Rigid flat placement case 2" << std::endl;
-      //  dde0 = ddelta/2.0;
-      //  dde1 = ddelta/2.0;
-      //} else if ((a1*h1 == 0.0 && k_BULK1*h_BULK1 == 0.0) || F1old == 0.0){
-      //  //std::cout << "Rigid flat placement case 3" << std::endl;
-      //  dde0 = ddelta/2.0;
-      //  dde1 = ddelta/2.0;
-      //} else {
-      //  //std::cout << "Rigid flat placement case 4" << std::endl;
-      //  dde0 = -((F0old - F1old - a1*ddelta*k1*h1 - ddelta*h_BULK1*k_BULK1)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
-      //  dde1 = -((F1old - F0old - a0*ddelta*k0*h0 - ddelta*h_BULK0*k_BULK0)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
-      //}
-      //if (abs(dde0) > abs(ddelta) ||  abs(dde1) > abs(ddelta)) {
-      //  dde0 = ddelta/2.0;
-      //  dde1 = ddelta/2.0;
-      //}
-
-      //(delta2_offset0 == 0.0 || a0 == 0.0 || a1 == 0.0) ? dde0 = ddelta/2.0 : dde0 = -((F0old - F1old - a1*ddelta*k1*h1 - ddelta*h_BULK1*k_BULK1)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
-      //(delta2_offset1 == 0.0 || a0 == 0.0 || a1 == 0.0) ? dde1 = ddelta/2.0 : dde1 = -((F1old - F0old - a0*ddelta*k0*h0 - ddelta*h_BULK0*k_BULK0)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
-      //(*delta2_offset0 == 0.0) ? dde0 = ddelta/2.0 : dde0 = -((F0old - F1old - a1*ddelta*k1*h1)/(a0*k0*h0 + a1*k1*h1));
-      //(*delta2_offset1 == 0.0) ? dde1 = ddelta/2.0 : dde1 = -((F1old - F0old  - a0*ddelta*k0*h0)/(a0*k0*h0 + a1*k1*h1));
-      //double delta0 = delta2_offset0 + dde0;
-      //double delta1 = delta2_offset1 + dde1;
-      //std::cout << "Mean disp   : " << delta << ", " << ddelta << ", " << model->radi << ", " << model->radj << " | delta: " << delta0 << ", " << delta1 << " | delta2_offset: " << delta2_offset0 << ", " << delta2_offset1 << "| dde: " << dde0 << ", " << dde1 << "| Fold: " << F0old << ", " << F1old << " | a: " << a0 << ", " << a1 << " | k_BULK: " << k_BULK0 << ", " << k_BULK1 << " | h_BULK: " << h_BULK0 << ", " << h_BULK1 << std::endl;
-
-      // the best scheme
+    
       if (delta > deltamax) deltamax = delta;
 
       double delta0old = history[delta_offset_0];
       double delta1old = history[delta_offset_1];
 
-      int i0 = std::max(i,j);
-      int i1 = std::min(i,j);
+      int i0;
+      int i1;
+      if (atom->tag[i] > atom->tag[j]) {
+        i0 = i;
+        i1 = j;
+      } else {
+        i0 = j;
+        i1 = i;
+      }
+
+      int rank = 0;
+      MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+      int i_ghost;
+      int j_ghost;
+      (i >= atom->nlocal) ? i_ghost = 1 : i_ghost = 0;
+      (j >= atom->nlocal) ? j_ghost = 1 : j_ghost = 0;
+      if (i_ghost == 1) {
+        std::cout << "rank: " << rank << ", i: " << i << ", j: " << j << ", i is ghost? " << i_ghost << ", j is ghost? " << j_ghost << ", nlocal: " << atom->nlocal << ", itag: " << atom->tag[i] << ", jtag: " << atom->tag[j] << std::endl;
+      }
+
+      //int i0 = std::max(i,j);
+      //int i1 = std::min(i,j);
       double R0 = radius[i0];
       double R1 = radius[i1];
-
-      //double delta_geo0;
-      //double delta_geo1;
-      //double deltaOpt1 = delta*(delta - 2.0*R1)/(2.0*(delta - R0 - R1));
-      //double deltaOpt2 = delta*(delta - 2.0*R0)/(2.0*(delta - R0 - R1));
-      //(R0 < R1) ? delta_geo0 = MAX(deltaOpt1,deltaOpt2) : delta_geo0 = MIN(deltaOpt1,deltaOpt2);
-      //(R0 < R1) ? delta_geo1 = MIN(deltaOpt1,deltaOpt2) : delta_geo1 = MAX(deltaOpt1,deltaOpt2);
-//
-      //double Rratio;
-      //(R0 < R1) ? Rratio = R0/R1 : Rratio = R1/R0;
-//
-      //double delta0;
-      //deltaOpt1 = delta_geo0 + delta*(1 - Rratio)*(deltamax-delta)/deltamax;
-      //deltaOpt2 = delta_geo0 - delta*(1 - Rratio)*(deltamax-delta)/deltamax;
-      //(R0 < R1) ? delta0 = MAX(deltaOpt1,deltaOpt2) : delta0 = MIN(deltaOpt1,deltaOpt2);
-//
-      //double delta1; 
-      //deltaOpt1 = delta_geo1 + delta*(1 - Rratio)*(deltamax-delta)/deltamax;
-      //deltaOpt2 = delta_geo1 - delta*(1 - Rratio)*(deltamax-delta)/deltamax;
-      //(R0 < R1) ? delta1 = MIN(deltaOpt1,deltaOpt2) : delta1 = MAX(deltaOpt1,deltaOpt2);
-
 
       double delta_geo0;
       double delta_geo1;
@@ -489,20 +402,10 @@ void FixMDRmeanSurfDisp::pre_force(int)
         const double Ac_offset1 = history[Ac_offset_1];
         ddelta_bar[i1] += Ac_offset1/Acon0[i1]*ddel1;
       }
-      // the best scheme
 
-      //std::cout << "Mean Surf Disp: " << R0 << ", " << R1 << "| Rratio " << Rratio << ", gm->delta " << delta << ", delta " << delta0 << ", deltamax " << deltamax << ", delta_geo " << delta_geo0 << ", interp " << (deltamax-delta)/deltamax << ", delta_bar " << ddelta_bar[i0] << ", " << ddelta_bar[i1] << std::endl;
-      //std::cout << "Mean Surf Disp: " << R0 << ", " << R1 << "| Rratio " << Rratio << ", gm->delta " << delta << ", delta " << delta1 << ", deltamax " << deltamax << ", delta_geo " << delta_geo1 << ", interp " << (deltamax-delta)/deltamax << ", delta_bar " << ddelta_bar[i0] << ", " << ddelta_bar[i1] << std::endl;
-
-      //if (Acon0[i0] != 0.0) {
-      //  const double Ac_offset0 = history[Ac_offset_0];
-      //  ddelta_bar[i0] += Ac_offset0/Acon0[i0]*dde0; // Multiply by 0.5 since displacement is shared equally between deformable particles.
-      //}
-//
-      //if (Acon0[i1] != 0.0) {
-      //  const double Ac_offset1 = history[Ac_offset_1];
-      //  ddelta_bar[i1] += Ac_offset1/Acon0[i1]*dde1;
-      //}
+      //int rank = 0;
+      //MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+      //std::cout << "delta_bar calc: Step: " << lmp->update->ntimestep << ", itag: " << atom->tag[i] << ", jtag: " << atom->tag[j] << ", i: " << i << ", j: " << j << ", rank: " << rank << ", Ac_offset0: " << history[Ac_offset_0] << ", Ac_offset1: " << history[Ac_offset_1] << ", Acon[i0]: " << Acon0[i0] << ", Acon[i1]: " << Acon0[i1] << ", ddel0: " << ddel0 << ", ddel1: " << ddel1 << ", ddelta_bar[i0]: " << ddelta_bar[i0] << ", ddelta_bar[i1]: " << ddelta_bar[i1] << std::endl;
 
       //if (Acon0[j] != 0.0) {
       //  const double delta_offset0 = history[0];
@@ -607,6 +510,17 @@ void FixMDRmeanSurfDisp::pre_force(int)
     } 
     }
   }
+
+  //comm->forward_comm(this);
+
+//and the function delcarations in the header:
+
+//int pack_forward_comm(int, int *, double *, int, int *) override;
+//void unpack_forward_comm(int, int, double *) override;
+
+//Then the methods would look like::
+
+//where comm_stage is a public flag to control hich quantity is being communicated
 
 }
 

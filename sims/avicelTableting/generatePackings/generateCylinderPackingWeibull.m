@@ -14,10 +14,9 @@ cylCenter = [0,0,cyl_h/2];
 
 % define number of particles and their radii
 N_goal = 200;  % goal for number of particles to insert
-R_avg = 0.4e-3;   % average sphere radius
-R_min = R_avg/1;
-R_max = R_avg*1.75;
-R_factor = 2*R_avg/60e-6;
+R_min = 0.37e-3;
+R_max = R_min*2;
+R_factor = 2*R_min/60e-6;
 
 [sphereCenters, sphereRadii] = placeCylSpheresWeibull(cylSize, cylCenter, N_goal, R_factor, R_min, R_max);
 
@@ -29,8 +28,8 @@ atom_type = ones(N_goal,1);
 rho = 1560; % particle density
 sphereDensities = rho*ones(N_goal,1);
 atoms = horzcat(id,atom_type,2*sphereRadii,sphereDensities,sphereCenters);
-simBox = [-5e-3 5e-3 -5e-3 5e-3 0 2e-2];
+simBox = [-4.25e-3 4.25e-3 -4.25e-3 4.25e-3 0 2e-2];
 writeFirstDataFile(filename,N_goal,atom_types,simBox,atoms)
 
-plotWeibullDistribution(sphereRadii,R_factor)
+%plotWeibullDistribution(sphereRadii,R_factor)
 

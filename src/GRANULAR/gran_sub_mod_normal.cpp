@@ -400,7 +400,7 @@ GranSubModNormalMDR::GranSubModNormalMDR(GranularModel *gm, LAMMPS *lmp) :
 {
   num_coeffs = 6; // Young's Modulus, Poisson's ratio, yield stress, effective surface energy, psi_b, coefficent of restitution
   contact_radius_flag = 1;
-  size_history = 46; 
+  size_history = 26; 
 
   nondefault_history_transfer = 1;
   transfer_history_factor = new double[size_history];
@@ -449,6 +449,8 @@ double GranSubModNormalMDR::calculate_forces()
   // Zunker and Kamrin, 2024, Part I: https://doi.org/10.1016/j.jmps.2023.105492
   // Zunker and Kamrin, 2024, Part II: https://doi.org/10.1016/j.jmps.2023.105493
 
+  const int itag_true = atom->tag[gm->i]; // true i particle tag
+  const int jtag_true = atom->tag[gm->j]; // true j particle tag
   const int i_true = gm->i;               // true i particle index
   const int j_true = gm->j;               // true j particle index
   const double radi_true = gm->radi;      // true i particle initial radius
@@ -460,10 +462,9 @@ double GranSubModNormalMDR::calculate_forces()
   double R0;
   double R1;
   double delta = gm->delta;               // apparent overlap
-  //if (gm->contact_type == PAIR) delta = gm->delta/2.0; // half displacement to imagine interaction with rigid flat 
   
+  //if (gm->contact_type == PAIR) delta = gm->delta/2.0; // half displacement to imagine interaction with rigid flat 
   //std::cout << "Normal force is called for: " << i_true << ", " << j_true << std::endl;
-
   //std::cout << "Contact model has been entered " << gm->contact_type << ", " << PAIR << ", " << WALL << ", " << WALLREGION << ", " << gm->itype << ", " << gm->jtype << ", " << gm->delta << std::endl; 
 
   // initialize indexing in history array of different constact history variables 
@@ -490,31 +491,10 @@ double GranSubModNormalMDR::calculate_forces()
   const int eps_bar_offset_0 = 20;        // volume-averaged infinitesimal strain tensor
   const int eps_bar_offset_1 = 21;
   const int penalty_offset_ = 22;         // contact penalty 
-
-  // temporary contact history variables
   const int deltamax_offset_ = 23;
-  const int delta2_offset_ = 24;
-  const int F_offset_0 = 25;
-  const int F_offset_1 = 26;
-  const int delta2_offset_0 = 27;           // apparent overlap 
-  const int delta2_offset_1 = 28; 
-  const int h_offset_0 = 29;
-  const int h_offset_1 = 30;  
-  const int deltae1D_offset_0 = 31;
-  const int deltae1D_offset_1 = 32;  
-  const int h_BULK_offset_0 = 33;
-  const int h_BULK_offset_1 = 34;  
-  const int k_BULK_offset_0 = 35;
-  const int k_BULK_offset_1 = 36;
-  const int k_MDR_offset_0 = 37;
-  const int k_MDR_offset_1 = 38; 
-  const int deltap_offset_0 = 39;
-  const int deltap_offset_1 = 40;
-  const int amax_offset_0 = 41;
-  const int amax_offset_1 = 42;
-  const int delta01_offset_ = 43;
-  const int eta_offset_0 = 44;
-  const int eta_offset_1 = 45;
+  const int deltap_offset_0 = 24;
+  const int deltap_offset_1 = 25;
+
 
   // initialize particle history variables 
   int tmp1, tmp2;
@@ -558,180 +538,16 @@ double GranSubModNormalMDR::calculate_forces()
 
   double * history = & gm->history[history_index]; // load in all history variables  
 
-  // Rigid flat placement schemes
+  // Rigid flat placement scheme
   double * deltamax_offset = & history[deltamax_offset_];
   double deltamax = *deltamax_offset;
-  double * Yflag_offset0 = & history[Yflag_offset_0];
-  double * Yflag_offset1 = & history[Yflag_offset_1];
-  double Yflag0 = *Yflag_offset0;
-  double Yflag1 = *Yflag_offset1;
-  double * cA_offset0 = & history[cA_offset_0];
-  double * cA_offset1 = & history[cA_offset_1];
-  double cA0 = *cA_offset0;
-  double cA1 = *cA_offset1;
-
-  // More rigid flat placement schemes
-  double * a_offset0 = & history[aAdh_offset_0];
-  double * a_offset1 = & history[aAdh_offset_1];
-  double a0 = *a_offset0;
-  double a1 = *a_offset1;
-  double * F_offset0 = & history[F_offset_0];
-  double * F_offset1 = & history[F_offset_1];
-  double F0old = *F_offset0;
-  double F1old = *F_offset1;
-  double * h_offset0 = & history[h_offset_0];
-  double * h_offset1 = & history[h_offset_1];
-  double h0 = *h_offset0;
-  double h1 = *h_offset1;
-  h0 = 1.0;
-  h1 = 1.0;
-  double * h_BULK_offset0 = & history[h_BULK_offset_0];
-  double * h_BULK_offset1 = & history[h_BULK_offset_1];
-  double h_BULK0 = *h_BULK_offset0;
-  double h_BULK1 = *h_BULK_offset1;
-  double * k_BULK_offset0 = & history[k_BULK_offset_0];
-  double * k_BULK_offset1 = & history[k_BULK_offset_1];
-  double k_BULK0 = *k_BULK_offset0;
-  double k_BULK1 = *k_BULK_offset1;
-  double * delta2_offset0 = & history[delta2_offset_0];
-  double * delta2_offset1 = & history[delta2_offset_1];
-  double * delta2_offset = & history[delta2_offset_];
-  double ddelta = gm->delta - *delta2_offset;
-  *delta2_offset = gm->delta;
-  double * k_MDR_offset0 = & history[k_MDR_offset_0];
-  double * k_MDR_offset1 = & history[k_MDR_offset_1];
-  double k0 = *k_MDR_offset0;
-  double k1 = *k_MDR_offset1;
-  *k_MDR_offset0 = 2*E/(1.0-pow(nu,2.0));
-  *k_MDR_offset1 = 2*E/(1.0-pow(nu,2.0));
-  double dde0;
-  double dde1;
-
-
-  double * eta_offset0 = & history[eta_offset_0];
-  double * eta_offset1 = & history[eta_offset_1];
-  double eta0 = *eta_offset0;
-  double eta1 = *eta_offset1;  
-
-  //std::cout << "Normal model: | dtcrit: " << dtcrit0 << ", " << dtcrit1 << " | eta: " << eta0 << ", " << eta1 << "| meff: " << gm->meff << "| atom->radius: " << atom->radius[i0] << ", " << atom->radius[i1] << ", dt: " << lmp->update->dt << ", k " << k0*a0 << ", " << k1*a1 << std::endl;
-  //std::cout << "Normal model: " << i0 << ", " << i1 << " | dtcrit: " << dtcrit0 << ", " << dtcrit1 << "| atom->mass: " << atom->mass[i0] << ", " << atom->mass[i1] << "| atom->radius: " << atom->radius[i0] << ", " << atom->radius[i1] << ", dt: " << lmp->update->dt << std::endl;
-  //std::cout << "Normal model: " << i0 << ", " << i1 << "| atom->mass: " << atom->mass[itype0][i0] << ", " << atom->mass[itype1][i1] << "| atom->radius: " << atom->radius[i0] << ", " << atom->radius[i1] << std::endl;
-
-  double * amax_offset0 = & history[amax_offset_0];
-  double * amax_offset1 = & history[amax_offset_1];
-  double amax0 = *amax_offset0;
-  double amax1 = *amax_offset1;
-  //std::cout << "Normal model - a0 " << a0 << ", a1 " << a1 << ", amax0 " << amax0 << ", amax1 " << amax1 << std::endl;
-  //a0 = amax0;
-  //a1 = amax1;
-
-  if (deltamax == 0.0 || (F0old == 0.0 && F1old == 0.0) || (a0 == 0.0 && a1 == 0.0)) {
-    //std::cout << "amax is zero - amax0 " << amax0 << ", amax1 " << amax1 << std::endl;
-    dde0 = ddelta/2.0;
-    dde1 = ddelta/2.0;
-  } else if ((F0old == 0.0 && ddelta >= 0.0) || (a0 == 0.0 && ddelta >= 0.0)) {
-    dde0 = ddelta;
-    dde1 = 0.0;
-  } else if ((F0old == 0.0 && ddelta < 0.0) || (a0 == 0.0 && ddelta < 0.0)) {
-    dde0 = 0.0;
-    dde1 = ddelta;
-  } else if ((F1old == 0.0 && ddelta >= 0.0) || (a1 == 0.0 && ddelta >= 0.0)) {
-    dde0 = 0.0;
-    dde1 = ddelta;
-  } else if ((F1old == 0.0 && ddelta < 0.0) || (a1 == 0.0 && ddelta < 0.0)) {
-    dde0 = ddelta;
-    dde1 = 0.0;
-  } else {
-    dde0 = -((F0old - F1old - a1*ddelta*k1*h1 - ddelta*eta1)/(a0*k0*h0 + eta0 + a1*k1*h1 + eta1));
-    dde1 = -((F1old - F0old - a0*ddelta*k0*h0 - ddelta*eta0)/(a0*k0*h0 + eta0 + a1*k1*h1 + eta1));
-    //dde0 = -((F0old - F1old - a1*ddelta*k1*h1 - ddelta*h_BULK1*k_BULK1)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
-    //dde1 = -((F1old - F0old - a0*ddelta*k0*h0 - ddelta*h_BULK0*k_BULK0)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
-    //dde0 = -((F0old - F1old - a1*ddelta*k1*h1)/(a0*k0*h0 + a1*k1*h1));
-    //dde1 = -((F1old - F0old - a0*ddelta*k0*h0)/(a0*k0*h0 + a1*k1*h1));
-  }
-
-  //if ((a0*h0 == 0.0 && k_BULK0*h_BULK0 == 0.0 && a1*h1 == 0.0 && k_BULK1*h_BULK1 == 0.0) || (F0old == 0.0 && F1old == 0.0)) {
-  //  //std::cout << "Rigid flat placement case 1" << std::endl;
-  //  dde0 = ddelta/2.0;
-  //  dde1 = ddelta/2.0;
-  //} else if ((a0*h0 == 0.0 && k_BULK0*h_BULK0 == 0.0) || F0old == 0.0) {
-  //  //std::cout << "Rigid flat placement case 2" << std::endl;
-  //  dde0 = ddelta/2.0;
-  //  dde1 = ddelta/2.0;
-  //} else if ((a1*h1 == 0.0 && k_BULK1*h_BULK1 == 0.0) || F1old == 0.0){
-  //  //std::cout << "Rigid flat placement case 3" << std::endl;
-  //  dde0 = ddelta/2.0;
-  //  dde1 = ddelta/2.0;
-  //} else {
-  //  //std::cout << "Rigid flat placement case 4" << std::endl;
-  //  dde0 = -((F0old - F1old - a1*ddelta*k1*h1 - ddelta*h_BULK1*k_BULK1)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
-  //  dde1 = -((F1old - F0old - a0*ddelta*k0*h0 - ddelta*h_BULK0*k_BULK0)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
-  //}
-  //if (abs(dde0) > abs(ddelta) ||  abs(dde1) > abs(ddelta)) {
-  //  dde0 = ddelta/2.0;
-  //  dde1 = ddelta/2.0;
-  //}
-
-  //(*delta2_offset0 == 0.0 || a0 == 0.0 || a1 == 0.0) ? dde0 = ddelta/2.0 : dde0 = -((F0old - F1old - a1*ddelta*k1*h1 - ddelta*h_BULK1*k_BULK1)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
-  //(*delta2_offset1 == 0.0 || a0 == 0.0 || a1 == 0.0) ? dde1 = ddelta/2.0 : dde1 = -((F1old - F0old - a0*ddelta*k0*h0 - ddelta*h_BULK0*k_BULK0)/(a0*k0*h0 + h_BULK0*k_BULK0 + a1*k1*h1 + h_BULK1*k_BULK1));
-  //(*delta2_offset0 == 0.0) ? dde0 = ddelta/2.0 : dde0 = -((F0old - F1old - a1*ddelta*k1*h1)/(a0*k0*h0 + a1*k1*h1));
-  //(*delta2_offset1 == 0.0) ? dde1 = ddelta/2.0 : dde1 = -((F1old - F0old  - a0*ddelta*k0*h0)/(a0*k0*h0 + a1*k1*h1));
-  double delta0 = *delta2_offset0 + dde0;
-  double delta1 = *delta2_offset1 + dde1;
-  //if (i_true == 39 && j_true == 85) {
-   //std::cout << "Normal model: " << gm->delta << ", " << ddelta << ", " << gm->radi << ", " << gm->radj << " | delta: " << delta0 << ", " << delta1 << " | delta2_offset: " << *delta2_offset0 << ", " << *delta2_offset1 << "| dde: " << dde0 << ", " << dde1 << ", " << (dde0 + dde1) << "| Fold: " << F0old << ", " << F1old << " | a: " << a0 << ", " << a1 << " | h: " << h0 << ", " << h1 << " | k_BULK: " << k_BULK0 << ", " << k_BULK1 << " | h_BULK: " << h_BULK0 << ", " << h_BULK1 << " | eta: " << eta0 << ", " << eta1 << ", k " << k0*a0 << ", " << k1*a1 << std::endl;
-   //std::cout << "Normal model: " << gm->delta << ", " << ddelta << ", " << gm->radi << ", " << gm->radj << "| dde: " << dde0 << ", " << dde1 << ", " << (dde0 + dde1) << "| Fold: " << F0old << ", " << F1old << " | a: " << a0 << ", " << a1 << " | h: " << h0 << ", " << h1 << " | eta: " << eta0 << ", " << eta1 << ", k " << k0*a0 << ", " << k1*a1 << ", YFlag: " << Yflag0 << ", " << Yflag1 << std::endl;
-  //}
-  
   double * deltap_offset0 = & history[deltap_offset_0];
   double * deltap_offset1 = & history[deltap_offset_1];
   double deltap0 = *deltap_offset0;
   double deltap1 = *deltap_offset1;
 
-  *delta2_offset0 = delta0;
-  *delta2_offset1 = delta1;
-
-  //double delta0;
-  //double delta1;
-  //if (a0 == 0.0|| a1 == 0.0) {
-  //  delta0 = *delta2_offset0 + dde0;
-  //  delta1 = *delta2_offset1 + dde1;
-  //} else {
-  //  delta0 = (gm->delta*k1*a1 + deltap1 - deltap0)/(k0*a0 + k1*a1);
-  //  delta1 = (gm->delta*k0*a0 + deltap0 - deltap1)/(k0*a0 + k1*a1);
-  //}
-
-  //std::cout << "Normal model: " << gm->delta << ", " << ddelta << ", " << gm->radi << ", " << gm->radj << " | delta: " << delta0 << ", " << delta1 << " | delta2_offset: " << *delta2_offset0 << ", " << *delta2_offset1 << "| dde: " << dde0 << ", " << dde1 << ", " << (dde0 + dde1) << "| Fold: " << F0old << ", " << F1old << " | a: " << a0 << ", " << a1 << " | h: " << h0 << ", " << h1 << std::endl; 
-  
-  //double delta0;
-  //double delta1;
-
-  //double Rratio;
-  //(gm->radi >= gm->radj) ? Rratio = gm->radi/gm->radj : Rratio = gm->radj/gm->radi;
-
-  if (gm->delta > *deltamax_offset) *deltamax_offset = gm->delta;
+  if (gm->delta >= *deltamax_offset) *deltamax_offset = gm->delta;
   deltamax = *deltamax_offset;
-
-  //double * delta01_offset = & history[delta01_offset_];
-  //double delta01 = *delta01_offset;
-  //double delta01hertz = pow(1.0/Rratio,0.3333333);
-  //double kf = 0.84*(std::exp(-5*(Rratio-1)) - 1);
-  ////double ku = 1.55*(1 - std::exp(-4*(Rratio-1)));
-  //double ku = 3/2*pow((Rratio - 1.0),1.0/6.0);
-//
-  //if (Yflag0 == 0.0 && Yflag1 == 0.0) {
-  //  delta01 = delta01hertz;
-  //} else if (gm->delta == deltamax) {
-  //  delta01 = delta01 + kf*ddelta;
-  //} else {
-  //  delta01 = delta01 + ku*ddelta;
-  //}
-  //std::cout << "Normal model: delta " << gm->delta << ", ddelta " << ddelta << ", radi " << gm->radi << ", radj " << gm->radj << ", Rratio " << Rratio << " | delta01: " << delta01 << ", " << *delta01_offset << ", " << delta01hertz << "| Yflag: " << Yflag0 << ", " << Yflag1  << "| k: " << kf << ", " << ku << std::endl; 
-  //*delta01_offset = delta01;
-
-  
-
-  //std::cout << "Yflag: " << Yflag0 << ", " << Yflag1 << std::endl;
 
   for (int contactSide = 0; contactSide < 2; contactSide++) { 
 
@@ -747,111 +563,33 @@ double GranSubModNormalMDR::calculate_forces()
     double * Ac_offset; 
     double * eps_bar_offset; 
     double * penalty_offset;
-
-    // added for rigid flat placement
-    double * h_offset;
-    double * deltae1D_offset;
-    double * h_BULK_offset;
-    double * k_BULK_offset;
     double * deltap_offset;
 
     if (contactSide == 0) {
       if (gm->contact_type == PAIR) {
-        gm->i = std::max(i_true,j_true);
-        gm->j = std::min(i_true,j_true);
-        if (gm->i == i_true) {
+        if (itag_true > jtag_true) {
+          gm->i = i_true;
+          gm->j = j_true;
           gm->radi = radi_true;
           gm->radj = radj_true;
         } else {
+          gm->i = j_true;
+          gm->j = i_true;
           gm->radi = radj_true;
           gm->radj = radi_true;
         }
         R0 = gm->radi;
         R1 = gm->radj;
-        double dtcrit0 = sqrt(gm->meff/(E*R0));
-        double dtcrit1 = sqrt(gm->meff/(E*R1));
-        *eta_offset0 = 1e0*k0*a0*dtcrit0/lmp->update->dt;
-        *eta_offset1 = 1e0*k1*a1*dtcrit1/lmp->update->dt;
-        
 
-        //if (gm->radi >= gm->radj) {
-        //  delta = gm->delta/(1.0+1.0/delta01);
-        //  delta0 = delta;
-        //} else {
-        //  delta = gm->delta/(1.0+delta01);
-        //  delta0 = delta;
-        //}
+        double delta_geo;
+        double delta_geoOpt1 = deltamax*(deltamax - 2.0*R1)/(2.0*(deltamax - R0 - R1));
+        double delta_geoOpt2 = deltamax*(deltamax - 2.0*R0)/(2.0*(deltamax - R0 - R1));
+        (gm->radi < gm->radj) ? delta_geo = MAX(delta_geoOpt1,delta_geoOpt2) : delta_geo = MIN(delta_geoOpt1,delta_geoOpt2);
 
-        //std::cout << "Normal model: CS " << contactSide << ", gm->delta " << gm->delta << ", delta " << delta << ", radi " << gm->radi << ", radj " << gm->radj << ", Rratio " << Rratio << " | delta01: " << delta01 << ", " << *delta01_offset << ", " << delta01hertz << "| Yflag: " << Yflag0 << ", " << Yflag1  << "| k: " << kf << ", " << ku << std::endl; 
+        double deltap = deltap0 + deltap1;
+        delta = delta_geo + (deltap0 - delta_geo)/(deltap - deltamax)*(gm->delta-deltamax);
 
-        //double k = 2*E/(1.0-pow(nu,2.0));
-        //delta = (gm->delta*k*R1 + deltap1 - deltap0)/(k*R0 + k*R1);
-        //delta = delta0;
-        //delta = 1.0/2.0*(gm->delta + deltap0 - deltap1);
-
-        //if (Yflag0 == 0.0 && Yflag1 == 0.0) {
-        //  double deltaOpt1 = gm->delta*R0/(R0+R1);
-        //  double deltaOpt2 = gm->delta*R1/(R0+R1);
-        //  (gm->radi < gm->radj) ? delta = MAX(deltaOpt1,deltaOpt2) : delta = MIN(deltaOpt1,deltaOpt2); 
-        //  std::cout << "CS 0, Case 1: " << R0 << ", " << R1 << "| " << gm->delta*R1/(R0+R1) << ", " << gm->delta*R0/(R0+R1) << std::endl;
-        //} else if(Yflag0 == 1.0 && Yflag1 == 1.0) {
-        //  double deltaOpt1 = (cA0 - cA1 + pow(gm->delta,2.0)*M_PI - 2.0*gm->delta*M_PI*R1)/(2.0*M_PI*(gm->delta - R0 - R1));
-        //  double deltaOpt2 = (cA1 - cA0 + pow(gm->delta,2.0)*M_PI - 2.0*gm->delta*M_PI*R0)/(2.0*M_PI*(gm->delta - R0 - R1));
-        //  (gm->radi < gm->radj) ? delta = MAX(deltaOpt1,deltaOpt2) : delta = MIN(deltaOpt1,deltaOpt2);
-        //  std::cout << "CS 0, Case 2: " << R0 << ", " << R1 << "| " << cA0 << ", " << cA1 << " | " << deltaOpt1 << ", " << deltaOpt2 << std::endl;
-        //} else if(Yflag0 == 0.0 && Yflag1 == 1.0) {
-        //  double deltaOpt1 = 1.0/2.0*(R0 - sqrt(-4.0*(-(cA1/M_PI) + gm->delta*R0) + pow(-R0 - 2.0*R1,2.0)) + 2.0*R1);
-        //  double deltaOpt2 = gm->delta - 1.0/2.0*(R0 - sqrt(-4.0*(-(cA1/M_PI) + gm->delta*R0) + pow(-R0 - 2.0*R1,2.0)) + 2.0*R1);
-        //  (gm->radi < gm->radj) ? delta = MAX(deltaOpt1,deltaOpt2) : delta = MIN(deltaOpt1,deltaOpt2);
-        //  std::cout << "CS 0, Case 3: " << gm->radi << ", " << gm->radj << "| " << deltaOpt1 << ", " << deltaOpt2 << std::endl;
-        //} else {
-        //  double deltaOpt1 = 1.0/2.0*(2.0*gm->delta - 2.0*R0 - R1 + sqrt(4.0*cA0 + 4.0*M_PI*pow(R0,2.0) - 4.0*gm->delta*M_PI*R1 + 4.0*M_PI*R0*R1 + M_PI*pow(R1,2.0))/sqrt(M_PI));
-        //  double deltaOpt2 = gm->delta - 1.0/2.0*(2.0*gm->delta - 2.0*R0 - R1 + sqrt(4.0*cA0 + 4.0*M_PI*pow(R0,2.0) - 4.0*gm->delta*M_PI*R1 + 4.0*M_PI*R0*R1 + M_PI*pow(R1,2.0))/sqrt(M_PI));
-        //  (gm->radi < gm->radj) ? delta = MAX(deltaOpt1,deltaOpt2) : delta = MIN(deltaOpt1,deltaOpt2);
-        //  std::cout << "CS 0, Case 4: " << gm->radi << ", " << gm->radj << "| " << deltaOpt1 << ", " << deltaOpt2 << std::endl;
-        //}
-        //std::cout << "Contact side 0: " << gm->radi << ", " << gm->radj << "| " << gm->delta << ", " << delta << std::endl;
-
-        //if (gm->delta == deltamax) {
-          //    double deltaOpt1 = gm->delta*(gm->delta - 2.0*R1)/(2.0*(gm->delta - R0 - R1));
-          //    double deltaOpt2 = gm->delta*(gm->delta - 2.0*R0)/(2.0*(gm->delta - R0 - R1));
-          //    (gm->radi < gm->radj) ? delta = MAX(deltaOpt1,deltaOpt2) : delta = MIN(deltaOpt1,deltaOpt2);
-        //} else {
-          
-          
-          // The best scheme
-          //double delta_geo;
-          //double delta_geoOpt1 = gm->delta*(gm->delta - 2.0*R1)/(2.0*(gm->delta - R0 - R1));
-          //double delta_geoOpt2 = gm->delta*(gm->delta - 2.0*R0)/(2.0*(gm->delta - R0 - R1));
-          //(gm->radi < gm->radj) ? delta_geo = MAX(delta_geoOpt1,delta_geoOpt2) : delta_geo = MIN(delta_geoOpt1,delta_geoOpt2);
-//
-          //double Rratio;
-          //(gm->radi < gm->radj) ? Rratio = gm->radi/gm->radj : Rratio = gm->radj/gm->radi;
-//
-          //double deltaOpt1 = delta_geo + gm->delta*(1 - Rratio)*(deltamax-gm->delta)/deltamax;
-          //double deltaOpt2 = delta_geo - gm->delta*(1 - Rratio)*(deltamax-gm->delta)/deltamax;
-          //(gm->radi < gm->radj) ? delta = MAX(deltaOpt1,deltaOpt2) : delta = MIN(deltaOpt1,deltaOpt2); 
-
-
-          double delta_geo;
-          double delta_geoOpt1 = deltamax*(deltamax - 2.0*R1)/(2.0*(deltamax - R0 - R1));
-          double delta_geoOpt2 = deltamax*(deltamax - 2.0*R0)/(2.0*(deltamax - R0 - R1));
-          (gm->radi < gm->radj) ? delta_geo = MAX(delta_geoOpt1,delta_geoOpt2) : delta_geo = MIN(delta_geoOpt1,delta_geoOpt2);
-
-          double deltap = deltap0 + deltap1;
-          delta = delta_geo + (deltap0 - delta_geo)/(deltap - deltamax)*(gm->delta-deltamax);
-
-
-
-          //std::cout << "Contact side 0: " << gm->radi << ", " << gm->radj << "| Rratio " << Rratio << ", gm->delta " << gm->delta << ", delta " << delta << ", deltamax " << deltamax << ", delta_geo " << delta_geo << ", deltaOpt1 " << deltaOpt1 << ", deltaOpt2 " << deltaOpt2 << ", interp " << (deltamax-gm->delta)/deltamax << std::endl;
-      //}
-
-        //double deltaOpt1 = deltamax*(deltamax - 2.0*R1)/(2.0*(deltamax - R0 - R1));
-        //double deltaOpt2 = deltamax*(deltamax - 2.0*R0)/(2.0*(deltamax - R0 - R1));
-        //double delta_ratio;
-        //(gm->radi < gm->radj) ? delta_ratio = MAX(deltaOpt1,deltaOpt2)/deltamax : delta_ratio = MIN(deltaOpt1,deltaOpt2)/deltamax;
-        //delta = gm->delta*delta_ratio;
-
+        //std::cout << "Contact side 0: " << gm->radi << ", " << gm->radj << ", gm->delta " << gm->delta << ", delta " << delta << ", deltamax " << deltamax << ", delta_geo " << delta_geo << ", delta_geoOpt1 " << delta_geoOpt1 << ", delta_geoOpt2 " << delta_geoOpt2 << ", deltamax-delta " << (deltamax-gm->delta) << std::endl;
       }
       delta_offset = & history[delta_offset_0];
       deltao_offset = & history[deltao_offset_0];
@@ -864,108 +602,31 @@ double GranSubModNormalMDR::calculate_forces()
       aAdh_offset = & history[aAdh_offset_0];
       Ac_offset = & history[Ac_offset_0];
       eps_bar_offset = & history[eps_bar_offset_0];
-
-      // added for rigid flat placement
-      h_offset = & history[h_offset_0];
-      deltae1D_offset = & history[deltae1D_offset_0];
-      h_BULK_offset = & history[h_BULK_offset_0];
-      k_BULK_offset = & history[k_BULK_offset_0];
       deltap_offset = & history[deltap_offset_0];
     } else {
       if (gm->contact_type != PAIR) break; // contact with particle-wall requires only one evaluation
-      gm->i = std::min(i_true,j_true);
-      gm->j = std::max(i_true,j_true);
-      if (gm->i == i_true) {
-        gm->radi = radi_true;
-        gm->radj = radj_true;
-      } else {
-        gm->radi = radj_true;
-        gm->radj = radi_true;
+      if (itag_true < jtag_true) {
+          gm->i = i_true;
+          gm->j = j_true;
+          gm->radi = radi_true;
+          gm->radj = radj_true;
+        } else {
+          gm->i = j_true;
+          gm->j = i_true;
+          gm->radi = radj_true;
+          gm->radj = radi_true;
       }
-
-      //if (gm->radi >= gm->radj) {
-      //    delta = gm->delta/(1.0+1.0/delta01);
-      //    delta1 = delta;
-      //} else {
-      //    delta = gm->delta/(1.0+delta01);
-      //    delta1 = delta;
-      //}
-
-      //std::cout << "Normal model: CS " << contactSide << ", gm->delta " << gm->delta << ", delta " << delta << ", radi " << gm->radi << ", radj " << gm->radj << ", Rratio " << Rratio << " | delta01: " << delta01 << ", " << *delta01_offset << ", " << delta01hertz << "| Yflag: " << Yflag0 << ", " << Yflag1  << "| k: " << kf << ", " << ku << std::endl; 
-
-      //double k = 2*E/(1.0-pow(nu,2.0));
-      //delta = (gm->delta*k*R0 + deltap0 - deltap1)/(k*R0 + k*R1);
-      //delta = delta1;
-      //delta = 1.0/2.0*(gm->delta + deltap1 - deltap0);
-
-      //if (Yflag0 == 0.0 && Yflag1 == 0.0) {
-      //  double deltaOpt1 = gm->delta*R0/(R0+R1);
-      //  double deltaOpt2 = gm->delta*R1/(R0+R1);
-      //  (gm->radi < gm->radj) ? delta = MAX(deltaOpt1,deltaOpt2) : delta = MIN(deltaOpt1,deltaOpt2);  
-      //  std::cout << "CS 1, Case 1: " << R0 << ", " << R1 << "| " << gm->delta*R1/(R0+R1) << ", " << gm->delta*R0/(R0+R1) << std::endl;
-      //} else if(Yflag0 == 1.0 && Yflag1 == 1.0) {
-      //  double deltaOpt1 = (cA0 - cA1 + pow(gm->delta,2.0)*M_PI - 2.0*gm->delta*M_PI*R1)/(2.0*M_PI*(gm->delta - R0 - R1));
-      //  double deltaOpt2 = (cA1 - cA0 + pow(gm->delta,2.0)*M_PI - 2.0*gm->delta*M_PI*R0)/(2.0*M_PI*(gm->delta - R0 - R1));
-      //  (gm->radi < gm->radj) ? delta = MAX(deltaOpt1,deltaOpt2) : delta = MIN(deltaOpt1,deltaOpt2);
-      //  std::cout << "CS 1, Case 2: " << R0 << ", " << R1 << "| " << cA0 << ", " << cA1 << " | " << deltaOpt1 << ", " << deltaOpt2 << std::endl;
-      //} else if(Yflag0 == 0.0 && Yflag1 == 1.0) {
-      //  double deltaOpt1 = 1.0/2.0*(R0 - sqrt(-4.0*(-(cA1/M_PI) + gm->delta*R0) + pow(-R0 - 2.0*R1,2.0)) + 2.0*R1);
-      //  double deltaOpt2 = gm->delta - 1.0/2.0*(R0 - sqrt(-4.0*(-(cA1/M_PI) + gm->delta*R0) + pow(-R0 - 2.0*R1,2.0)) + 2.0*R1);
-      //  (gm->radi < gm->radj) ? delta = MAX(deltaOpt1,deltaOpt2) : delta = MIN(deltaOpt1,deltaOpt2);
-      //  std::cout << "CS 1, Case 3: " << gm->radi << ", " << gm->radj << "| " << deltaOpt1 << ", " << deltaOpt2 << std::endl;
-      //} else {
-      //  double deltaOpt1 = 1.0/2.0*(2.0*gm->delta - 2.0*R0 - R1 + sqrt(4.0*cA0 + 4.0*M_PI*pow(R0,2.0) - 4.0*gm->delta*M_PI*R1 + 4.0*M_PI*R0*R1 + M_PI*pow(R1,2.0))/sqrt(M_PI));
-      //  double deltaOpt2 = gm->delta - 1.0/2.0*(2.0*gm->delta - 2.0*R0 - R1 + sqrt(4.0*cA0 + 4.0*M_PI*pow(R0,2.0) - 4.0*gm->delta*M_PI*R1 + 4.0*M_PI*R0*R1 + M_PI*pow(R1,2.0))/sqrt(M_PI));
-      //  (gm->radi < gm->radj) ? delta = MAX(deltaOpt1,deltaOpt2) : delta = MIN(deltaOpt1,deltaOpt2);
-      //  std::cout << "CS 1, Case 4: " << gm->radi << ", " << gm->radj << "| " << deltaOpt1 << ", " << deltaOpt2 << std::endl;
-      //}
-
-      //double deltaOpt1 = gm->delta*(gm->delta - 2.0*R1)/(2.0*(gm->delta - R0 - R1));
-      //double deltaOpt2 = gm->delta*(gm->delta - 2.0*R0)/(2.0*(gm->delta - R0 - R1));
-      //(gm->radi < gm->radj) ? delta = MAX(deltaOpt1,deltaOpt2) : delta = MIN(deltaOpt1,deltaOpt2);
-
-      //if (gm->delta == deltamax) {
-      //    double deltaOpt1 = gm->delta*(gm->delta - 2.0*R1)/(2.0*(gm->delta - R0 - R1));
-      //    double deltaOpt2 = gm->delta*(gm->delta - 2.0*R0)/(2.0*(gm->delta - R0 - R1));
-      //    (gm->radi < gm->radj) ? delta = MAX(deltaOpt1,deltaOpt2) : delta = MIN(deltaOpt1,deltaOpt2);
-      //} else {
-
-
-
-          //// the best scheme
-          //double delta_geo;
-          //double delta_geoOpt1 = gm->delta*(gm->delta - 2.0*R1)/(2.0*(gm->delta - R0 - R1));
-          //double delta_geoOpt2 = gm->delta*(gm->delta - 2.0*R0)/(2.0*(gm->delta - R0 - R1));
-          //(gm->radi < gm->radj) ? delta_geo = MAX(delta_geoOpt1,delta_geoOpt2) : delta_geo = MIN(delta_geoOpt1,delta_geoOpt2);
-//
-          //double Rratio;
-          //(gm->radi < gm->radj) ? Rratio = gm->radi/gm->radj : Rratio = gm->radj/gm->radi;
-//
-          //double deltaOpt1 = delta_geo + gm->delta*(1 - Rratio)*(deltamax-gm->delta)/deltamax;
-          //double deltaOpt2 = delta_geo - gm->delta*(1 - Rratio)*(deltamax-gm->delta)/deltamax;
-          //(gm->radi < gm->radj) ? delta = MAX(deltaOpt1,deltaOpt2) : delta = MIN(deltaOpt1,deltaOpt2); 
-
-          double delta_geo;
-          double delta_geoOpt1 = deltamax*(deltamax - 2.0*R1)/(2.0*(deltamax - R0 - R1));
-          double delta_geoOpt2 = deltamax*(deltamax - 2.0*R0)/(2.0*(deltamax - R0 - R1));
-          (gm->radi < gm->radj) ? delta_geo = MAX(delta_geoOpt1,delta_geoOpt2) : delta_geo = MIN(delta_geoOpt1,delta_geoOpt2);
-
-          double deltap = deltap0 + deltap1;
-          delta = delta_geo + (deltap1 - delta_geo)/(deltap - deltamax)*(gm->delta-deltamax);
-
-
-
-          //std::cout << "Contact side 1: " << gm->radi << ", " << gm->radj << "| Rratio " << Rratio << ", gm->delta " << gm->delta << ", delta " << delta << ", deltamax " << deltamax << ", delta_geo " << delta_geo << ", deltaOpt1 " << deltaOpt1 << ", deltaOpt2 " << deltaOpt2 << ", interp " << (deltamax-gm->delta)/deltamax << std::endl;
-      //}
-
-      //double deltaOpt1 = deltamax*(deltamax - 2.0*R1)/(2.0*(deltamax - R0 - R1));
-      //double deltaOpt2 = deltamax*(deltamax - 2.0*R0)/(2.0*(deltamax - R0 - R1));
-      //double delta_ratio;
-      //(gm->radi < gm->radj) ? delta_ratio = MAX(deltaOpt1,deltaOpt2)/deltamax : delta_ratio = MIN(deltaOpt1,deltaOpt2)/deltamax;
-      //delta = gm->delta*delta_ratio;
       
-      //delta = gm->delta*(gm->delta - 2.0*gm->radj)/(2.0*(gm->delta - gm->radj - gm->radi));
-      //std::cout << "Contact side 1: " << gm->radi << ", " << gm->radj << "| " << gm->delta << ", " << delta << std::endl;
+      double delta_geo;
+      double delta_geoOpt1 = deltamax*(deltamax - 2.0*R1)/(2.0*(deltamax - R0 - R1));
+      double delta_geoOpt2 = deltamax*(deltamax - 2.0*R0)/(2.0*(deltamax - R0 - R1));
+      (gm->radi < gm->radj) ? delta_geo = MAX(delta_geoOpt1,delta_geoOpt2) : delta_geo = MIN(delta_geoOpt1,delta_geoOpt2);
+
+      double deltap = deltap0 + deltap1;
+      delta = delta_geo + (deltap1 - delta_geo)/(deltap - deltamax)*(gm->delta-deltamax);
+
+      //std::cout << "Contact side 1: " << gm->radi << ", " << gm->radj << ", gm->delta " << gm->delta << ", delta " << delta << ", deltamax " << deltamax << ", delta_geo " << delta_geo << ", delta_geoOpt1 " << delta_geoOpt1 << ", delta_geoOpt2 " << delta_geoOpt2 << ", deltamax-delta " << (deltamax-gm->delta) << std::endl;
+      
       delta_offset = & history[delta_offset_1];
       deltao_offset = & history[deltao_offset_1];
       delta_MDR_offset = & history[delta_MDR_offset_1];
@@ -977,32 +638,14 @@ double GranSubModNormalMDR::calculate_forces()
       aAdh_offset = & history[aAdh_offset_1];
       Ac_offset = & history[Ac_offset_1];
       eps_bar_offset = & history[eps_bar_offset_1];
-
-      // added for rigid flat placement
-      h_offset = & history[h_offset_1];
-      deltae1D_offset = & history[deltae1D_offset_1];
-      h_BULK_offset = & history[h_BULK_offset_1];
-      k_BULK_offset = & history[k_BULK_offset_1];
       deltap_offset = & history[deltap_offset_1];
     }
-
-    //delta = gm->delta;
 
     // temporary i and j indices
     const int i = gm->i;
     const int j = gm->j;
 
     //std::cout << lmp->update->ntimestep << std::endl;
-
-    //if (lmp->update->ntimestep == 229999 && i == 2 && j == 0) {
-    //  std::cout << "timestep is equal to 229999" << std::endl;
-    //}
-
-    //if ( (i == 0 && j == 2 && gm->contact_type == 0) || (i == 2 && j == 0 && gm->contact_type == 0)) {
-    //if ( (gm->contact_type == 0) ) {
-      //std::cout << i << ", " << j << ", " << gm->contact_type << " || " << *delta_offset << ", " << (uintptr_t)(delta_offset) << " || " << *deltao_offset << ", " << (uintptr_t)(deltao_offset) << " || " << *delta_MDR_offset << ", " << (uintptr_t)(delta_MDR_offset) << " || " << *delta_BULK_offset << ", " << (uintptr_t)(delta_BULK_offset) << " || " << *deltamax_MDR_offset << ", " << (uintptr_t)(deltamax_MDR_offset) << " || "  << *Yflag_offset << ", " << (uintptr_t)(Yflag_offset) << " || " << *deltaY_offset << ", " << (uintptr_t)(deltaY_offset) << " || " << *cA_offset << ", " << (uintptr_t)(cA_offset) << " || " << *aAdh_offset << ", " << (uintptr_t)(aAdh_offset) << " || " << *Ac_offset << ", " << (uintptr_t)(Ac_offset) << " || " << *eps_bar_offset << ", " << (uintptr_t)(eps_bar_offset) << std::endl;
-    //  std::cout << i << ", " << j << ", " << gm->contact_type << " || " << *delta_offset << ", " << (uintptr_t)(delta_offset) << " || " << *deltao_offset << ", " << (uintptr_t)(deltao_offset) << " || " << *delta_MDR_offset << ", " << (uintptr_t)(delta_MDR_offset) << " || " << *delta_BULK_offset << ", " << (uintptr_t)(delta_BULK_offset) << " || " << *deltamax_MDR_offset << ", " << (uintptr_t)(deltamax_MDR_offset) << " || "  << *Yflag_offset << ", " << (uintptr_t)(Yflag_offset) << " || " << *deltaY_offset << ", " << (uintptr_t)(deltaY_offset) << " || " << Velas[i] << ", " << eps_bar[i] << std::endl;
-    //}
 
     // material and geometric property definitions
     // E, nu, Y gamma , psi_b, and CoR are already defined.
@@ -1083,26 +726,7 @@ double GranSubModNormalMDR::calculate_forces()
       //std::cout << *deltap_offset << std::endl;
     }
 
-    // added for rigid flat placement
-    (contactSide == 0) ? *amax_offset0 = amax : *amax_offset1 = amax;
-
-    double ddeltae1D = deltae1D - *deltae1D_offset;
-    *deltae1D_offset = deltae1D;
-    if (ddelta == 0.0) {
-      *h_offset = 1.0;
-    } else if (delta_MDR == deltamax_MDR && *Yflag_offset > 0.0) {
-      const double hratio = abs(ddeltae1D/ddelta);
-      *h_offset = std::min(hratio,1.0);
-    } else {
-      *h_offset = abs(ddeltae1D/ddelta);
-    }
-    //(ddelta != 0.0 ) ? *h_offset = abs(ddeltae1D/ddelta) : *h_offset = 1.0;
-    //if (i_true == 4 && j_true == 52){
-    //std::cout << "h_offset: " << *h_offset << " | ddeltae1D: " << ddeltae1D << " | ddelta: " << ddelta << " | R: " << R << std::endl;
-    //}
-
     //std::cout << psi_b << ", " << psi[i] << ", " << A << ", " << B << ", " << pY << ", " << amax << " || " << deltao << ", " << delta << ", " << ddelta << ", " << *delta_offset << ", " << ddelta_bar[i] << " || " << delta_MDR << ", " << ddelta_MDR << ", " << *delta_MDR_offset << ", " << deltamax_MDR << " || " << delta_BULK << ", " << ddelta_BULK << ", " << *delta_BULK_offset << " || " << R << std::endl;
-    
     //std::cout << i << ", " << j << ", " << A << ", " << B << " || " << deltao << ", " << delta << ", " << ddelta << ", " << R <<  ", " << M_PI*pow(amax,2.0) << std::endl;
 
     double a_na;
@@ -1114,7 +738,6 @@ double GranSubModNormalMDR::calculate_forces()
     //if (i_true == 4 && j_true == 52){
     //std::cout << "CS: " << contactSide << ", aAdh: " << aAdh << ", deltae1D: " << deltae1D << ", A: " << A << ", B:" << B << ", amax: " << amax << ", deltae1D: " << deltae1D << ", R: " << R << std::endl;
     //}
-
 
     if ( gamma > 0.0  ) { // adhesive contact
     double g_aAdh;
@@ -1155,44 +778,6 @@ double GranSubModNormalMDR::calculate_forces()
           if ( aAdh < acrit ) {
             aAdh = 0.0;
           } else {
-
-          //// bisection to find aAdh
-
-          //const double maxIterations = 100;
-          //const double error = 1e-8;
-          //double a_bisec = aAdh;
-          //double b_bisec = 0.97*acrit;
-          //double root = (a_bisec + b_bisec)/2.0;
-          //double froot;
-          //double fb_bisec;
-          ////if (aAdh = amax) {
-          ////  aAdh = aAdh - (aAdh-acrit)*0.001;
-          ////} else {
-          //  for (int lv1 = 0; lv1 < maxIterations; ++lv1) {
-          //    froot = deltae1D + sqrt(2.0*M_PI*root*gamma/Eeff) - ( A/2 - A/B*sqrt(pow(B,2.0)/4 - pow(root,2.0)) );
-          //    if (abs(froot) < error) {
-          //      break;
-          //    } else {
-          //      fb_bisec = deltae1D + sqrt(2.0*M_PI*b_bisec*gamma/Eeff) - ( A/2 - A/B*sqrt(pow(B,2.0)/4 - pow(b_bisec,2.0)) );
-          //      if (froot > 0.0 && fb_bisec > 0.0) {
-          //        b_bisec = root;
-          //      } else {
-          //        a_bisec = root;
-          //      }
-          //      root = (a_bisec + b_bisec)/2.0;
-          //    }
-          //    //if (i == 123  && j == 166) {
-          //    //  std::cout << "Adhesion calculation - i " << i << ", j " << j << ", lv1 " << lv1 << ", froot " << froot << ", fb_bisec " << fb_bisec << ", root " << root << ", amax " << amax << ", acrit " << acrit << ", a_bisec " << a_bisec << ", b_bisec " << b_bisec << std::endl;
-          //    //}
-          //    if (lv1 == maxIterations-1){
-          //      aAdh = 0.0;
-          //      //std::cout << "Max iterations reached - i " << i << ", j " << j << ", froot " << froot << ", root " << root << ", amax " << amax << ", acrit: " << acrit << std::endl;
-          //      //std::exit(1);
-          //    }
-          //  }
-          ////}
-          //(root < acrit ) ? aAdh = 0.0 : aAdh = root;
-
             // newton-raphson to find aAdh
             const double maxIterations = 100;
             const double error = 1e-10;
@@ -1217,51 +802,7 @@ double GranSubModNormalMDR::calculate_forces()
               }
             }
             aAdh = aAdh_tmp;
-            
-
-            //const double maxIterations = 1000;
-            //const double error = 1e-8;
-            //const double error2 = 1e-16;
-            //double aAdh_tmp = aAdh;
-            //double fa; 
-            //double fa2;
-            //double dfda;
-            //if (aAdh = amax) {
-            //  aAdh = aAdh - (aAdh-acrit)*0.01;
-            //} else {
-            //  for (int lv1 = 0; lv1 < maxIterations; ++lv1) {
-            //    fa = deltae1D + sqrt(2.0*M_PI*aAdh_tmp*gamma/Eeff) - ( A/2 - A/B*sqrt(pow(B,2.0)/4 - pow(aAdh_tmp,2.0)) );
-            //    if (abs(fa) < error) {
-            //      //std::cout << "abs(fa) < error, fa " << fa << " CS " << contactSide << " lv1 " << lv1 << " R " << R << " deltae1D " << deltae1D << " , lmax " << sqrt(2.0*M_PI*aAdh_tmp*gamma/Eeff) << " , g_adh " << ( A/2 - A/B*sqrt(pow(B,2.0)/4 - pow(aAdh_tmp,2.0)) ) << std::endl;
-            //      break;
-            //    } 
-            //    const double dfda_term1_denom = -pow(aAdh_tmp,2.0) + pow(B,2.0)/4.0;
-            //    if (dfda_term1_denom == 0.0) {
-            //      const double facrit = deltae1D + sqrt(2.0*M_PI*acrit*gamma/Eeff) - ( A/2 - A/B*sqrt(pow(B,2.0)/4 - pow(acrit,2.0)) ); 
-            //      dfda = (facrit-fa)/(acrit-aAdh_tmp);
-            //      std::cout << " CS " << contactSide << "facrit " << facrit << " fa " << fa << " acrit " << acrit  << " aAdh_tmp " << aAdh_tmp << " dfda " << dfda << std::endl;
-            //    } else {
-            //      dfda = -((aAdh_tmp*A)/(B*sqrt(-pow(aAdh_tmp,2.0) + pow(B,2.0)/4.0))) + (gamma*sqrt(M_PI/2.0))/(Eeff*sqrt((aAdh_tmp*gamma)/Eeff));
-            //    }
-            //    if ( (aAdh_tmp - fa/dfda < B/2.0) && (aAdh_tmp - fa/dfda > 0.0) ) aAdh_tmp = aAdh_tmp - fa/dfda;
-            //    fa2 = deltae1D + sqrt(2.0*M_PI*aAdh_tmp*gamma/Eeff) - ( A/2 - A/B*sqrt(pow(B,2.0)/4 - pow(aAdh_tmp,2.0)) );
-            //    if (abs(fa-fa2) < error2) {
-            //      //std::cout << "abs(fa-fa2) < error, fa " << fa << " fa2 " << fa2 << " dfda " << dfda << " CS " << contactSide << " lv1 " << lv1 << " R " << R << " deltae1D " << deltae1D << " , lmax " << sqrt(2.0*M_PI*aAdh_tmp*gamma/Eeff) << " , g_adh " << ( A/2 - A/B*sqrt(pow(B,2.0)/4 - pow(aAdh_tmp,2.0)) ) << std::endl;
-            //      //std::cout << "dfda terms: term 1 " << -((aAdh_tmp*A)/(B*sqrt(-pow(aAdh_tmp,2.0) + pow(B,2.0)/4.0))) << " term 2 " << (gamma*sqrt(M_PI/2.0))/(Eeff*sqrt((aAdh_tmp*gamma)/Eeff)) << " denom " << (-pow(aAdh_tmp,2.0) + pow(B,2.0)/4.0) << std::endl;
-            //      break;
-            //    } 
-            //    if (lv1 == maxIterations-1){
-            //      aAdh_tmp = 0.0;
-            //      //std::cout << "Max iterations reached: fa " << fa << " aAdh_tmp, " << aAdh_tmp << std::endl;
-            //    }
-            //  }
-            //  aAdh = aAdh_tmp;
-            //}
-
-            //std::cout << " CS " << contactSide << " R " << R << "deltae1D " << deltae1D << " , lmax " << lmax << " , g_adh" << g_aAdh << ", aAdh " << aAdh << std::endl; 
-
-
-          
+             
             g_aAdh = A/2.0 - A/B*sqrt(pow(B,2.0)/4.0 - pow(aAdh,2.0));                  
             const double deltaeAdh = g_aAdh; 
             const double F_na = Eeff*(A*B/4.0)*(acos(1.0 - 2.0*deltaeAdh/A) - (1.0 - 2.0*deltaeAdh/A)*sqrt(4.0*deltaeAdh/A - 4.0*pow(deltaeAdh,2.0)/pow(A,2.0)));
@@ -1283,10 +824,11 @@ double GranSubModNormalMDR::calculate_forces()
       } 
     }
 
-    //std::cout << gm->i << ", " << gm->j << ", aAdh_offset: " << *aAdh_offset << ", aAdh: " << aAdh << ", a_na: " << a_na << std::endl;
+    if ( ((atom->tag[i_true] == 26) || (atom->tag[j_true] == 22)) && lmp->update->ntimestep > 4243000) {
+      std::cout << "CS: " << contactSide << ", i_true: " << i_true << ", j_true: " << j_true << ", i_tag: " << atom->tag[i_true] << ", j_tag: " << atom->tag[j_true] << ", deltae1D: " << deltae1D << ", A: " << A << ", B: " << B << ", amax: " << amax << ", deltamax_MDR: " << deltamax_MDR << ", R: " << R << std::endl;
+    }
 
-    // added for rigid flat placement
-    (contactSide == 0) ? a0 = a_na : a1 = a_na;
+    //std::cout << gm->i << ", " << gm->j << ", aAdh_offset: " << *aAdh_offset << ", aAdh: " << aAdh << ", a_na: " << a_na << std::endl;
 
     contacts[i] += 1;
     adhesive_length[i] += aAdh;
@@ -1309,21 +851,64 @@ double GranSubModNormalMDR::calculate_forces()
     double F_BULK;
     (delta_BULK <= 0.0) ? F_BULK = 0.0 : F_BULK = (1.0/Vgeo[i])*Acon0[i]*delta_BULK*kappa*Ac;
 
-    if (i_true == 135 && j_true == 186) {
-      std::cout << "i_true: " << i_true << ", j_true: " << j_true << ", i_tag: " << atom->tag[i_true] << ", j_tag: " << atom->tag[j_true] << ", deltae1D: " << deltae1D << ", A: " << A << ", B: " << B << ", amax: " << amax << ", deltamax_MDR: " << deltamax_MDR << ", R: " << R << ", F_MDR: " << F_MDR << ", F_BULK: " << F_BULK << std::endl;
-    }
+    //if (i == 35 && lmp->update->ntimestep % 1000 == 0) {
+      //double **x = atom->x;
+      //const double xi = x[i_true][0];
+    //  std::cout << "i: " << i << ", j: " << j <<  "i_true: " << i_true << ", i_tag: " << atom->tag[i_true] << ", j_true: " << j_true << ", j_tag " << atom->tag[j_true] << ", radi_true: " << radi_true << ", radj_true " << radj_true << ", gm->radi: " << gm->radi << ", gm->radj: " << gm->radj << ", R: " << R << ", Ro: " << Ro << std::endl;
+    //}
 
-    // added for rigid flat placement
-    (Vgeo[i] == 0.0) ? *k_BULK_offset = 0.0 : *k_BULK_offset = (1.0/Vgeo[i])*Acon0[i]*kappa*Ac;
-    (ddelta != 0.0) ? *h_BULK_offset = abs(ddelta_BULK/ddelta) : *h_BULK_offset = 1.0;
-    //std::cout << "h_BULK_offset: " << *h_BULK_offset << " | ddeltae1D: " << ddelta_BULK << " | ddelta: " << ddelta << " | R: " << R << std::endl;
-    //std::cout << "k_BULK_offset: " << *k_BULK_offset << ", Vgeo: " << Vgeo[i] << ", Acon0: " << Acon0[i] << ", kappa: " << kappa << ", Ac: " << Ac << ",wij :" << wij << std::endl;
+    //if (i_true == 35 && lmp->update->ntimestep >= 736002 && lmp->update->ntimestep <= 736005) {
+    //  //double **x = atom->x;
+    //  //const double xi = x[i_true][0];
+    //  std::cout << "i_true: " << i_true << ", i_tag: " << atom->tag[i_true] << ", R: " << R << ", Ro: " << Ro << std::endl;
+    //}
+
+    //if ( ((atom->tag[i_true] == 4 && atom->tag[j_true] == 11) || (atom->tag[i_true] == 11 && atom->tag[j_true] == 4)) && lmp->update->ntimestep == 45000) {
+    //  std::cout << "CS: " << contactSide << ", contact_type: " << gm->contact_type << ", pair: " << PAIR << ", wall: " << WALL << ", WALLREGION " << WALLREGION  << ", itag_true: " << atom->tag[i_true] << ", jtag_true: " << atom->tag[j_true] << ", F_MDR: " << F_MDR << ", F_BULK: " << F_BULK << ", wij: " << wij << ", gm->delta: " << gm->delta << ", delta: " << delta << ", delmax: " << deltamax << ", deltap: " << *deltap_offset << std::endl;
+    //}
+
+    //if ( ((atom->tag[i_true] == 4301) || (atom->tag[j_true] == 4076)) && lmp->update->ntimestep > 1016700) {
+    //  std::cout << "i: " << i << ", j: " << j <<  "i_true: " << i_true << ", i_tag: " << atom->tag[i_true] << ", j_true: " << j_true << ", j_tag " << atom->tag[j_true] << ", radi_true: " << radi_true << ", radj_true " << radj_true << ", gm->radi: " << gm->radi << ", gm->radj: " << gm->radj << ", R: " << R << ", Ro: " << Ro << ", F_MDR: " << F_MDR << ", F_BULK: " << F_BULK << ", wij: " << wij << ", gm->delta: " << gm->delta << ", delta: " << delta << ", delmax: " << deltamax << ", deltap: " << *deltap_offset << std::endl;
+    //}
+
+    //if ( ((atom->tag[i_true] == 4) || (atom->tag[j_true] == 4)) && lmp->update->ntimestep == 45000) {
+    //  int rank = 0;
+    //  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    //  double **x = atom->x;
+    //  const double xi = x[i][0];
+    //  const double xj = x[j][0];
+    //  const double yi = x[i][1];
+    //  const double yj = x[j][1];
+    //  const double zi = x[i][2];
+    //  const double zj = x[j][2];
+    //  std::cout << "CS: " << contactSide << ", rank, " << rank << ", CT: " << gm->contact_type << ", itag_true: " << atom->tag[i_true] << ", jtag_true: " << atom->tag[j_true] << ", i: " << i << ", j: " << j << ", nlocal: " << atom->nlocal << ", nghost: " << atom->nghost << ", wij: " << wij << ", gm->delta: " << gm->delta << ", delta: " << delta << ", delmax: " << deltamax << ", deltap: " << *deltap_offset << ", R: " << R << ", xi: " << xi << ", xj: " << xj << ", yi: " << yi << ", yj: " << yj << ", zi: " << zi << ", zj: " << zj << std::endl;
+    //}
+
+    int rank = 0;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    double **x = atom->x;
+    const double xi = x[i][0];
+    const double xj = x[j][0];
+    const double yi = x[i][1];
+    const double yj = x[j][1];
+    const double zi = x[i][2];
+    const double zj = x[j][2];
+    const double dis = sqrt(pow((xi-xj),2.0) + pow((yi-yj),2.0) + pow((yi-yj),2.0));
+    const double delta_test = gm->radi + gm->radj - dis;
+    if (delta_test < 0.0) {
+      std::cout << "Particles are not touching but a force is evaluated, CS: " << contactSide << ", rank, " << rank << ", CT: " << gm->contact_type << ", itag_true: " << atom->tag[i_true] << ", jtag_true: " << atom->tag[j_true] << ", i: " << i << ", j: " << j << ", nlocal: " << atom->nlocal << ", nghost: " << atom->nghost << ", wij: " << wij << ", gm->delta: " << gm->delta << ", delta: " << delta << ", delmax: " << deltamax << ", deltap: " << *deltap_offset << ", R: " << R << ", xi: " << xi << ", xj: " << xj << ", yi: " << yi << ", yj: " << yj << ", zi: " << zi << ", zj: " << zj << std::endl;
+      std::exit(1);
+    }
 
     //if (F_BULK > 0.0) {
     //  std::cout << "F_BULK is: " << F_BULK << std::endl;
     //}
 
     //std::cout << delta_BULK << ", " << F_BULK << ", " << (1.0/Vgeo[i])*Acon0[i]*delta_BULK*kappa*Ac << std::endl;
+
+    //int rank = 0;
+    //MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    //std::cout << "Step: " << lmp->update->ntimestep << ", CS: " << contactSide << ", itag: " << atom->tag[i] << ", jtag: " << atom->tag[j] << ", rank: " << rank << ", gm->delta: " << gm->delta << ", delta: " << delta << ", ddelta: " << ddelta << ", delta_bar: " << ddelta_bar[i] << ", R: " << R << ", F_MDR: " << F_MDR << ", F_BULK: " << F_BULK << std::endl;    
 
     //std::cout << gm->i << ", " << gm->j << ", " << Vgeo[i] << ", " << Acon0[i] << ", " << Acon1[i] << ", " << Ac << ", " << kappa << " || " << psi[i] << ", " << ddelta_bar[i] << ", " << ddelta << ", " << ddelta_MDR << ", " << ddelta_BULK << ", " << delta << ", " << delta_MDR << ", " << delta_BULK << ", " << F_MDR << ", " << F_BULK << ", " << R << " || " << deltae1D << ", " << A << ", " << B << std::endl;
 
@@ -1368,11 +953,16 @@ double GranSubModNormalMDR::calculate_forces()
       //std::cout << i << ", " << j << ", " << gm->contact_type << " || " << eps_bar_contact << ", " << *eps_bar_offset << ", " << (uintptr_t)(eps_bar_offset) << " || " << wij << ", " << ddeltao << ", " << deltao << " || " << Ro << ", " << R << std::endl;
       //}
 
+    
+    double desp_bar_contact = eps_bar_contact - *eps_bar_offset; // && desp_bar_contact < 0.0
     if(delta_MDR == deltamax_MDR && *Yflag_offset > 0.0 && F_MDR > 0.0){
       const double Vo = (4.0/3.0)*M_PI*pow(Ro,3.0);
       dRnumerator[i] += -Vo*(eps_bar_contact - *eps_bar_offset) - wij*M_PI*ddeltao*( 2.0*deltao*Ro - pow(deltao,2.0) + pow(R,2.0) - pow(Ro,2.0) );
-
       dRdenominator[i] += wij*2.0*M_PI*R*(deltao + R - Ro);
+
+      //if ( (atom->tag[i] == 9) ) {
+      // std::cout << "CT: " << gm->contact_type << ", " << PAIR << "i_tag: " << atom->tag[i] << ", j_tag: " << atom->tag[j] << ", deltae1D: " << deltae1D << ", R: " << R << ", Ro: " << Ro << ", F_MDR: " << F_MDR << ", F_BULK: " << F_BULK << ", wij: " << wij << ", deltao: " << deltao << ", ddeltao: " << ddeltao << ", desp_bar: " << eps_bar_contact - *eps_bar_offset << std::endl;
+      //}
     }
     *eps_bar_offset = eps_bar_contact;
 
@@ -1406,10 +996,6 @@ double GranSubModNormalMDR::calculate_forces()
   //}
 
   }
-
-  // rigid flat placement scheme 
-  *F_offset0 = F0;
-  *F_offset1 = F1;
    
   gm->i = i_true;
   gm->j = j_true;
@@ -1425,8 +1011,8 @@ double GranSubModNormalMDR::calculate_forces()
 
   // wall force magnifier
   double * deltao_offset = & history[deltao_offset_0];
-  //const double wallForceMagnifer = std::exp(10.0*(*deltao_offset)/Rinitial[gm->i] - 9.0) + 1.0;
-  const double wallForceMagnifer = 1.0;
+  const double wallForceMagnifer = std::exp(10.0*(*deltao_offset)/Rinitial[gm->i] - 10.0) + 1.0;
+  //const double wallForceMagnifer = 1.0;
 
   // assign final force
   //(gm->contact_type != PAIR) ? F = wij*F0*wallForceMagnifer : F = wij*(F0 + F1)/2;  // F = 2*wij*pow(1/F0 + 1/F1,-1);
@@ -1435,17 +1021,6 @@ double GranSubModNormalMDR::calculate_forces()
     F = wij*F0*wallForceMagnifer;
   } else {
     F = wij*(F0 + F1)/2.0; 
-    //if (R0 <  R1) {
-    //  //double b = pow(R1/R0,0.65);
-    //  F = wij*F0; // wij*(F0 + F1/b)/2; //
-    //  //F = wij*F0;
-    //  //std::cout << "Number 1: " << F << ", " << F0 << ", " << F1 << " | " << R0 << ", " << R1 << ", " << b << std::endl; 
-    //} else {
-    //  //double b = pow(R1/R0,0.65);
-    //  F = wij*F1;  // wij*(F0/b + F1)/2; //
-    //  //F = wij*F1;
-    //  //std::cout << "Number 2: " << F << ", " << F0 << ", " << F1 << " | " << R0 << ", " << R1 << ", " << b << std::endl;
-    //}
   }
 
   //std::cout << F << ", " << F0 << ", " << F1 << " | " << R0 << ", " << R1 << std::endl;

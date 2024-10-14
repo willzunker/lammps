@@ -511,7 +511,7 @@ void FixMDRmeanSurfDisp::pre_force(int)
     }
   }
 
-  //comm->forward_comm(this);
+  comm->forward_comm(this);
 
 //and the function delcarations in the header:
 

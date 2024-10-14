@@ -219,7 +219,7 @@ void FixMDRradiusUpdate::pre_force(int)
     adhesive_length[i] = 0.0;
   }
 
-  //comm->forward_comm(this);
+  comm->forward_comm(this);
 
 }
 
@@ -376,7 +376,7 @@ void FixMDRradiusUpdate::end_of_step()
   //double sigmayy_avg = sigmayy_sum/nlocal;
   //double sigmazz_avg = sigmazz_sum/nlocal;
 
-  //comm->forward_comm(this);
+  comm->forward_comm(this);
 }
 
 //std::cout << radius[i] << ", " << dR << ", " << dRnumerator[i] << ", " << dRdenominator[i] << ", " << dRdenominator[i] - 4.0*M_PI*pow(R,2.0)  << std::endl;

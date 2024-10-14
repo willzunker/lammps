@@ -461,6 +461,8 @@ double GranSubModNormalMDR::calculate_forces()
   double F1;                              // force on contact side 1
   double R0;
   double R1;
+  int i0;
+  int i1;
   double delta = gm->delta;               // apparent overlap
   
   //if (gm->contact_type == PAIR) delta = gm->delta/2.0; // half displacement to imagine interaction with rigid flat 
@@ -580,6 +582,8 @@ double GranSubModNormalMDR::calculate_forces()
         }
         R0 = gm->radi;
         R1 = gm->radj;
+        i0 = gm->i;
+        i1 = gm->j;
 
         double delta_geo;
         double delta_geoOpt1 = deltamax*(deltamax - 2.0*R1)/(2.0*(deltamax - R0 - R1));
@@ -589,7 +593,7 @@ double GranSubModNormalMDR::calculate_forces()
         double deltap = deltap0 + deltap1;
         delta = delta_geo + (deltap0 - delta_geo)/(deltap - deltamax)*(gm->delta-deltamax);
 
-        //std::cout << "Contact side 0: " << gm->radi << ", " << gm->radj << ", gm->delta " << gm->delta << ", delta " << delta << ", deltamax " << deltamax << ", delta_geo " << delta_geo << ", delta_geoOpt1 " << delta_geoOpt1 << ", delta_geoOpt2 " << delta_geoOpt2 << ", deltamax-delta " << (deltamax-gm->delta) << std::endl;
+      // std::cout << "Contact side 0: " << gm->radi << ", " << gm->radj << ", gm->delta " << gm->delta << ", delta " << delta << ", deltamax " << deltamax << ", delta_geo " << delta_geo << ", delta_geoOpt1 " << delta_geoOpt1 << ", delta_geoOpt2 " << delta_geoOpt2 << ", deltamax-delta " << (deltamax-gm->delta) << std::endl;
       }
       delta_offset = & history[delta_offset_0];
       deltao_offset = & history[deltao_offset_0];
@@ -824,10 +828,6 @@ double GranSubModNormalMDR::calculate_forces()
       } 
     }
 
-    if ( ((atom->tag[i_true] == 26) || (atom->tag[j_true] == 22)) && lmp->update->ntimestep > 4243000) {
-      std::cout << "CS: " << contactSide << ", i_true: " << i_true << ", j_true: " << j_true << ", i_tag: " << atom->tag[i_true] << ", j_tag: " << atom->tag[j_true] << ", deltae1D: " << deltae1D << ", A: " << A << ", B: " << B << ", amax: " << amax << ", deltamax_MDR: " << deltamax_MDR << ", R: " << R << std::endl;
-    }
-
     //std::cout << gm->i << ", " << gm->j << ", aAdh_offset: " << *aAdh_offset << ", aAdh: " << aAdh << ", a_na: " << a_na << std::endl;
 
     contacts[i] += 1;
@@ -850,6 +850,10 @@ double GranSubModNormalMDR::calculate_forces()
     // bulk force calculation
     double F_BULK;
     (delta_BULK <= 0.0) ? F_BULK = 0.0 : F_BULK = (1.0/Vgeo[i])*Acon0[i]*delta_BULK*kappa*Ac;
+
+    if ( ((atom->tag[i_true] == 4135) || (atom->tag[j_true] == 661)) && lmp->update->ntimestep > 1093500) {
+      std::cout << "CS: " << contactSide << ", i_true: " << i_true << ", j_true: " << j_true << ", i_tag: " << atom->tag[i_true] << ", j_tag: " << atom->tag[j_true] << ", deltae1D: " << deltae1D << ", A: " << A << ", B: " << B << ", amax: " << amax << ", deltamax_MDR: " << deltamax_MDR << ", R: " << R << ", F_MDR: " << F_MDR << ", F_BULK: " << F_BULK << ", wij: " << wij << ", gm->delta: " << gm->delta << ", delta: " << delta << ", delmax: " << deltamax << ", deltap: " << *deltap_offset << std::endl;
+    }
 
     //if (i == 35 && lmp->update->ntimestep % 1000 == 0) {
       //double **x = atom->x;
@@ -884,21 +888,21 @@ double GranSubModNormalMDR::calculate_forces()
     //  std::cout << "CS: " << contactSide << ", rank, " << rank << ", CT: " << gm->contact_type << ", itag_true: " << atom->tag[i_true] << ", jtag_true: " << atom->tag[j_true] << ", i: " << i << ", j: " << j << ", nlocal: " << atom->nlocal << ", nghost: " << atom->nghost << ", wij: " << wij << ", gm->delta: " << gm->delta << ", delta: " << delta << ", delmax: " << deltamax << ", deltap: " << *deltap_offset << ", R: " << R << ", xi: " << xi << ", xj: " << xj << ", yi: " << yi << ", yj: " << yj << ", zi: " << zi << ", zj: " << zj << std::endl;
     //}
 
-    int rank = 0;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    double **x = atom->x;
-    const double xi = x[i][0];
-    const double xj = x[j][0];
-    const double yi = x[i][1];
-    const double yj = x[j][1];
-    const double zi = x[i][2];
-    const double zj = x[j][2];
-    const double dis = sqrt(pow((xi-xj),2.0) + pow((yi-yj),2.0) + pow((yi-yj),2.0));
-    const double delta_test = gm->radi + gm->radj - dis;
-    if (delta_test < 0.0) {
-      std::cout << "Particles are not touching but a force is evaluated, CS: " << contactSide << ", rank, " << rank << ", CT: " << gm->contact_type << ", itag_true: " << atom->tag[i_true] << ", jtag_true: " << atom->tag[j_true] << ", i: " << i << ", j: " << j << ", nlocal: " << atom->nlocal << ", nghost: " << atom->nghost << ", wij: " << wij << ", gm->delta: " << gm->delta << ", delta: " << delta << ", delmax: " << deltamax << ", deltap: " << *deltap_offset << ", R: " << R << ", xi: " << xi << ", xj: " << xj << ", yi: " << yi << ", yj: " << yj << ", zi: " << zi << ", zj: " << zj << std::endl;
-      std::exit(1);
-    }
+    //int rank = 0;
+    //MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    //double **x = atom->x;
+    //const double xi = x[i][0];
+    //const double xj = x[j][0];
+    //const double yi = x[i][1];
+    //const double yj = x[j][1];
+    //const double zi = x[i][2];
+    //const double zj = x[j][2];
+    //const double dis = sqrt(pow((xi-xj),2.0) + pow((yi-yj),2.0) + pow((zi-zj),2.0));
+    //const double delta_test = gm->radi + gm->radj - dis;
+    //if (delta_test < 0.0 && gm->contact_type != 2) {
+    //  std::cout << "Particles are not touching but a force is evaluated, CS: " << contactSide << ", rank, " << rank << ", contact_type: " << gm->contact_type << ", pair: " << PAIR << ", wall: " << WALL << ", WALLREGION " << WALLREGION << ", itag_true: " << atom->tag[i_true] << ", jtag_true: " << atom->tag[j_true] << ", i: " << i << ", j: " << j << ", nlocal: " << atom->nlocal << ", nghost: " << atom->nghost << ", wij: " << wij << ", gm->delta: " << gm->delta << ", delta: " << delta << ", delmax: " << deltamax << ", deltap: " << *deltap_offset << ", R: " << R << ", xi: " << xi << ", xj: " << xj << ", yi: " << yi << ", yj: " << yj << ", zi: " << zi << ", zj: " << zj << std::endl;
+    //  std::exit(1);
+    //}
 
     //if (F_BULK > 0.0) {
     //  std::cout << "F_BULK is: " << F_BULK << std::endl;
@@ -1009,9 +1013,12 @@ double GranSubModNormalMDR::calculate_forces()
 
   //std::cout << gm->i << ", " << gm->j  << ", " << xi << ", " << xj << std::endl;
 
-  // wall force magnifier
-  double * deltao_offset = & history[deltao_offset_0];
-  const double wallForceMagnifer = std::exp(10.0*(*deltao_offset)/Rinitial[gm->i] - 10.0) + 1.0;
+  // force magnifiers to prevent over penetration
+  double * deltao_offset0 = & history[deltao_offset_0];
+  double * deltao_offset1 = & history[deltao_offset_1];
+  const double wallForceMagnifer = std::exp(10.0*(*deltao_offset0)/Rinitial[gm->i] - 10.0) + 1.0;
+  const double forceMagnifer0 = std::exp(10.0*(*deltao_offset0)/Rinitial[i0] - 10.0) + 1.0;
+  const double forceMagnifer1 = std::exp(10.0*(*deltao_offset1)/Rinitial[i1] - 10.0) + 1.0;
   //const double wallForceMagnifer = 1.0;
 
   // assign final force
@@ -1020,7 +1027,7 @@ double GranSubModNormalMDR::calculate_forces()
   if (gm->contact_type != PAIR) {
     F = wij*F0*wallForceMagnifer;
   } else {
-    F = wij*(F0 + F1)/2.0; 
+    F = wij*(F0*forceMagnifer0 + F1*forceMagnifer1)/2.0; 
   }
 
   //std::cout << F << ", " << F0 << ", " << F1 << " | " << R0 << ", " << R1 << std::endl;

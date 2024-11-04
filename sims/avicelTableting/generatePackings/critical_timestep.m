@@ -5,7 +5,7 @@ clc
 % timestep
 
 rho = 1560;
-R = 0.133e-3;
+R = 0.48e-3;
 E = 9e9;
 V = 4/3*pi*R^3;
 m = rho*V;

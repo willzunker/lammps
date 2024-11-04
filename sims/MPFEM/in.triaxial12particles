@@ -78,7 +78,7 @@ thermo_modify lost ignore norm no
 
 ##################################### DEFINE WALL MOVEMENT  #################################################
 
-variable disp_max equal 0.465
+variable disp_max equal 0.499
 variable ddisp equal 0.00001
 variable compression_steps equal round(${disp_max}/${ddisp})
 variable output_rate equal round(${compression_steps}/100)

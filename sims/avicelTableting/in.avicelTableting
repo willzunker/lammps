@@ -5,9 +5,9 @@ atom_modify map array
 comm_modify vel yes
 units si
 newton off
-neighbor      0.45e-3 bin
+neighbor      1.5e-3 bin
 neigh_modify every 10 delay 2000 check no 
-timestep 0.4e-7
+timestep 1.8e-7
 processors 2 2 1
 
 ######################### SIMULATION BOUNDING BOX, INTEGRATION, AND, GRAVITY ###########################
@@ -17,7 +17,7 @@ read_data spheres.data
 
 ######################################### ADD DIE AND ATOM PARAMETERIZATION ##############################################
 
-variable atomRadius              equal 0.133e-3*1.5
+variable atomRadius              equal 0.48e-3*1.5
 variable atomDiameter            equal 2*${atomRadius}
 variable atomDensity             equal 1560 
 variable dieRadius               equal 4e-3
@@ -31,16 +31,16 @@ pair_style granular
 variable YoungsModulus equal 9e9
 variable PoissonsRatio equal 0.3
 variable YieldStress equal 1.5e8
-variable SurfaceEnergy equal 400 #220
+variable SurfaceEnergy equal 220 #220
 variable SurfaceEnergyWall equal 0.0
 variable psi_b equal 0.5
 variable CoR equal 0.5
 variable kt equal 2/7*${YoungsModulus}*${atomRadius}
 variable kt_wall equal 2/7*${YoungsModulus}*${atomRadius}
 variable xgammat equal 0.0
-variable mu_s equal 1.0
+variable mu_s equal 0.85
 variable mu_s_wall equal 0.1
-variable mu_roll equal 0.85
+variable mu_roll equal 0.8
 variable k_roll equal 2.25*${mu_roll}*${mu_roll}*${YoungsModulus}*${atomRadius}
 variable gamma_roll equal 0.0
 
@@ -91,8 +91,16 @@ fix grav all gravity 9.81 vector 0 0 -1
 
 ######################################## SCREEN OUTPUT  ####################################################
 
+variable ax atom fx/mass
+variable ay atom fy/mass
+variable az atom fz/mass
+variable aMag atom sqrt(v_ax*v_ax+v_ay*v_ay+v_az*v_az)
+compute aMagAvg all reduce ave v_aMag
+
+variable forceToAccelRatio atom v_force/(mass*v_aMag)
+
 compute       1 all erotate/sphere
-thermo_style  custom dt step atoms ke vol v_disp_upper
+thermo_style  custom dt step atoms ke vol v_disp_upper c_aMagAvg
 thermo        100
 thermo_modify lost ignore norm no
 
@@ -127,8 +135,10 @@ variable szz_ave equal c_sigmazz_ave
 variable Vparticles equal c_Velas_sum
 variable adh_length_ave equal c_adhesive_length_ave
 
+variable force atom sqrt(fx^2+fy^2+fz^2)
+
 fix log all print 1 "${sxx_ave} ${syy_ave} ${szz_ave} ${Vparticles} ${adh_length_ave}" file avgStresses.csv screen no
-dump dumpParticles all custom ${output_rate} avicelTableting.dump id type mass diameter x y z vx vy vz fx fy fz c_ke c_sigmaxx c_sigmayy c_sigmazz
+dump dumpParticles all custom ${output_rate} avicelTableting.dump id type mass diameter x y z vx vy vz fx fy fz c_ke c_sigmaxx c_sigmayy c_sigmazz v_aMag v_force v_forceToAccelRatio
 dump dumpParticlesVTK all vtk ${output_rate} post/particles_*.vtk id x y z fx fy fz vx vy vz c_ke radius c_sigmaxx c_sigmayy c_sigmazz
 
 ######################################### RUN SIMULATION ##########################################

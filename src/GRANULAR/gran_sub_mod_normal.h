@@ -140,10 +140,11 @@ namespace Granular_NS {
     GranSubModNormalMDR(class GranularModel *, class LAMMPS *);
     void coeffs_to_local() override;
     double calculate_forces() override;
+    void set_fncrit() override;
     double psi_b;
 
    protected:
-    double E, nu, Y, gamma, CoR;
+    double E, nu, Y, gamma, CoR, F;
   };
 
 }    // namespace Granular_NS

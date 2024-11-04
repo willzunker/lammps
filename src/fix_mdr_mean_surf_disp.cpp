@@ -385,6 +385,16 @@ void FixMDRmeanSurfDisp::pre_force(int)
       (R0 < R1) ? delta_geo0 = MAX(deltaOpt1,deltaOpt2) : delta_geo0 = MIN(deltaOpt1,deltaOpt2);
       (R0 < R1) ? delta_geo1 = MIN(deltaOpt1,deltaOpt2) : delta_geo1 = MAX(deltaOpt1,deltaOpt2);
 
+      double overlap_limit = 0.75;
+
+      if (delta_geo0/R0 > overlap_limit) {
+        delta_geo0 = R0*overlap_limit;
+        delta_geo1 = deltamax - delta_geo0;
+      } else if (delta_geo1/R1 > overlap_limit) {
+        delta_geo1 = R1*overlap_limit;
+        delta_geo0 = deltamax - delta_geo1;
+      }
+
       double deltap = deltap0 + deltap1;
 
       double delta0 = delta_geo0 + (deltap0 - delta_geo0)/(deltap - deltamax)*(delta-deltamax);

@@ -19,7 +19,7 @@ create_box 2 simBox
 
 pair_style granular
 # E, nu, Y, gamma, psi_b, CoR
-pair_coeff * * mdr 1e6 0.3 5e4 0.0 0.08 1.0 tangential linear_nohistory 0.0 0.0
+pair_coeff * * mdr 1e6 0.3 5e4 100 0.8 1.0 tangential linear_nohistory 0.0 0.0
 
 ##################################### INSERT PARTICLES ####################################################
 
@@ -39,7 +39,7 @@ set atom 2 diameter ${dtop} density ${den}
 
 compute       1 all erotate/sphere
 thermo_style  custom dt step atoms ke c_1 vol 
-thermo        1
+thermo        100
 thermo_modify lost ignore norm no
 
 ##################################### DEFINE RUN CONTROL VARIBLES  #############################################
@@ -56,7 +56,7 @@ variable vel equal ${ddelta}/${mydt}
 variable vel_neg equal -${vel}
 variable zeroDisp equal 0.0
 
-variable deltaI     equal 1.8
+variable deltaI     equal 2.0
 variable deltaII    equal 3.0
 variable deltaIII   equal 4.75
 variable deltaIV    equal 6.25
@@ -79,7 +79,7 @@ dump dumpParticles all custom 10 particle_5.dump id type x y z fx fy fz radius
 variable x2 equal x[2]
 variable del equal (${dtop}+${dbot})/2-x[2]
 variable fx2 equal fx[2]
-fix log all print 1 "${del},${fx2}" file twoParticleDR_5.csv title "del,fx2" screen no
+fix log all print 1 "${del},${fx2}" file extremeOverlap_5.csv title "del,fx2" screen no
 
 ######################################### BEGIN RUN  ##########################################################
 

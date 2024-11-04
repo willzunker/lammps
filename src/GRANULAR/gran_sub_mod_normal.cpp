@@ -456,7 +456,7 @@ double GranSubModNormalMDR::calculate_forces()
   const double radi_true = gm->radi;      // true i particle initial radius
   const double radj_true = gm->radj;      // true j particle initial radius
     
-  double F;                               // average force 
+  //double F;                               // average force 
   double F0;                              // force on contact side 0
   double F1;                              // force on contact side 1
   double R0;
@@ -567,6 +567,8 @@ double GranSubModNormalMDR::calculate_forces()
     double * penalty_offset;
     double * deltap_offset;
 
+    double overlap_limit = 0.75;
+
     if (contactSide == 0) {
       if (gm->contact_type == PAIR) {
         if (itag_true > jtag_true) {
@@ -586,14 +588,22 @@ double GranSubModNormalMDR::calculate_forces()
         i1 = gm->j;
 
         double delta_geo;
+        double delta_geo_alt;
         double delta_geoOpt1 = deltamax*(deltamax - 2.0*R1)/(2.0*(deltamax - R0 - R1));
         double delta_geoOpt2 = deltamax*(deltamax - 2.0*R0)/(2.0*(deltamax - R0 - R1));
         (gm->radi < gm->radj) ? delta_geo = MAX(delta_geoOpt1,delta_geoOpt2) : delta_geo = MIN(delta_geoOpt1,delta_geoOpt2);
+        (gm->radi > gm->radj) ? delta_geo_alt = MAX(delta_geoOpt1,delta_geoOpt2) : delta_geo_alt = MIN(delta_geoOpt1,delta_geoOpt2);
+
+        if (delta_geo/gm->radi > overlap_limit) {
+          delta_geo = gm->radi*overlap_limit;
+        } else if (delta_geo_alt/gm->radj > overlap_limit) {
+          delta_geo = deltamax - gm->radj*overlap_limit;
+        }
 
         double deltap = deltap0 + deltap1;
         delta = delta_geo + (deltap0 - delta_geo)/(deltap - deltamax)*(gm->delta-deltamax);
 
-      // std::cout << "Contact side 0: " << gm->radi << ", " << gm->radj << ", gm->delta " << gm->delta << ", delta " << delta << ", deltamax " << deltamax << ", delta_geo " << delta_geo << ", delta_geoOpt1 " << delta_geoOpt1 << ", delta_geoOpt2 " << delta_geoOpt2 << ", deltamax-delta " << (deltamax-gm->delta) << std::endl;
+      //std::cout << "CS 0: " << gm->radi << ", " << gm->radj << ", gm->delta " << gm->delta << ", delta " << delta << ", deltamax " << deltamax << ", delta_geo " << delta_geo << ", delta_geo_alt " << delta_geo_alt << ", delta_geo/Ri " << delta_geo/gm->radi << ", delta_geo_alt/Rj " << delta_geo_alt/gm->radj  << ", delta_geoOpt1 " << delta_geoOpt1 << ", delta_geoOpt2 " << delta_geoOpt2 << ", deltamax-delta " << (deltamax-gm->delta) << std::endl;
       }
       delta_offset = & history[delta_offset_0];
       deltao_offset = & history[deltao_offset_0];
@@ -622,14 +632,22 @@ double GranSubModNormalMDR::calculate_forces()
       }
       
       double delta_geo;
+      double delta_geo_alt;
       double delta_geoOpt1 = deltamax*(deltamax - 2.0*R1)/(2.0*(deltamax - R0 - R1));
       double delta_geoOpt2 = deltamax*(deltamax - 2.0*R0)/(2.0*(deltamax - R0 - R1));
       (gm->radi < gm->radj) ? delta_geo = MAX(delta_geoOpt1,delta_geoOpt2) : delta_geo = MIN(delta_geoOpt1,delta_geoOpt2);
+      (gm->radi > gm->radj) ? delta_geo_alt = MAX(delta_geoOpt1,delta_geoOpt2) : delta_geo_alt = MIN(delta_geoOpt1,delta_geoOpt2);
+
+      if (delta_geo/gm->radi > overlap_limit) {
+        delta_geo = gm->radi*overlap_limit;
+      } else if (delta_geo_alt/gm->radj > overlap_limit) {
+        delta_geo = deltamax - gm->radj*overlap_limit;
+      }
 
       double deltap = deltap0 + deltap1;
       delta = delta_geo + (deltap1 - delta_geo)/(deltap - deltamax)*(gm->delta-deltamax);
 
-      //std::cout << "Contact side 1: " << gm->radi << ", " << gm->radj << ", gm->delta " << gm->delta << ", delta " << delta << ", deltamax " << deltamax << ", delta_geo " << delta_geo << ", delta_geoOpt1 " << delta_geoOpt1 << ", delta_geoOpt2 " << delta_geoOpt2 << ", deltamax-delta " << (deltamax-gm->delta) << std::endl;
+      //std::cout << "CS 1: " << gm->radi << ", " << gm->radj << ", gm->delta " << gm->delta << ", delta " << delta << ", deltamax " << deltamax << ", delta_geo " << delta_geo << ", delta_geo_alt " << delta_geo_alt << ", delta_geo/Ri " << delta_geo/gm->radi << ", delta_geo_alt/Rj " << delta_geo_alt/gm->radj  << ", delta_geoOpt1 " << delta_geoOpt1 << ", delta_geoOpt2 " << delta_geoOpt2 << ", deltamax-delta " << (deltamax-gm->delta) << std::endl;
       
       delta_offset = & history[delta_offset_1];
       deltao_offset = & history[deltao_offset_1];
@@ -751,7 +769,7 @@ double GranSubModNormalMDR::calculate_forces()
         if ( std::isnan(F_MDR) ) {
            std::cout << "F_MDR is NaN, case 1: no tensile springs" << std::endl;
            //std::cout << "Normal model: " << gm->delta << ", " << ddelta << ", " << gm->radi << ", " << gm->radj << " | delta: " << delta0 << ", " << delta1 << " | delta2_offset: " << *delta2_offset0 << ", " << *delta2_offset1 << "| dde: " << dde0 << ", " << dde1 << "| Fold: " << F0old << ", " << F1old << " | a: " << a0 << ", " << a1 << " | k_BULK: " << k_BULK0 << ", " << k_BULK1 << " | h_BULK: " << h_BULK0 << ", " << h_BULK1 << std::endl;
-           std::cout << "i_true: " << i_true << ", j_true: " << j_true << ", i_tag: " << atom->tag[i_true] << ", j_tag: " << atom->tag[j_true] << ", deltae1D: " << deltae1D << ", A: " << A << ", B: " << B << ", amax: " << amax << ", deltamax_MDR: " << deltamax_MDR << ", R: " << R << std::endl;
+           std::cout << "i_true: " << i_true << ", j_true: " << j_true << ", i_tag: " << atom->tag[i_true] << ", j_tag: " << atom->tag[j_true] << ", contact type: " << gm->contact_type << ", deltae1D: " << deltae1D << ", A: " << A << ", B: " << B << ", amax: " << amax << ", deltamax_MDR: " << deltamax_MDR << ", R: " << R << std::endl;
            std::exit(1);
         }
         *aAdh_offset = a_fac*a_na;
@@ -851,9 +869,9 @@ double GranSubModNormalMDR::calculate_forces()
     double F_BULK;
     (delta_BULK <= 0.0) ? F_BULK = 0.0 : F_BULK = (1.0/Vgeo[i])*Acon0[i]*delta_BULK*kappa*Ac;
 
-    if ( ((atom->tag[i_true] == 4135) || (atom->tag[j_true] == 661)) && lmp->update->ntimestep > 1093500) {
-      std::cout << "CS: " << contactSide << ", i_true: " << i_true << ", j_true: " << j_true << ", i_tag: " << atom->tag[i_true] << ", j_tag: " << atom->tag[j_true] << ", deltae1D: " << deltae1D << ", A: " << A << ", B: " << B << ", amax: " << amax << ", deltamax_MDR: " << deltamax_MDR << ", R: " << R << ", F_MDR: " << F_MDR << ", F_BULK: " << F_BULK << ", wij: " << wij << ", gm->delta: " << gm->delta << ", delta: " << delta << ", delmax: " << deltamax << ", deltap: " << *deltap_offset << std::endl;
-    }
+    //if (atom->tag[i_true] == 4135 && lmp->update->ntimestep > 10935000 && gm->contact_type == 2) {
+    //  std::cout << "CS: " << contactSide << ", i_true: " << i_true << ", j_true: " << j_true << ", i_tag: " << atom->tag[i_true] << ", j_tag: " << atom->tag[j_true] << ", deltae1D: " << deltae1D << ", A: " << A << ", B: " << B << ", amax: " << amax << ", deltamax_MDR: " << deltamax_MDR << ", R: " << R << ", F_MDR: " << F_MDR << ", F_BULK: " << F_BULK << ", wij: " << wij << ", gm->delta: " << gm->delta << ", delta: " << delta << ", delmax: " << deltamax << ", deltap: " << *deltap_offset << std::endl;
+    //}
 
     //if (i == 35 && lmp->update->ntimestep % 1000 == 0) {
       //double **x = atom->x;
@@ -1014,11 +1032,8 @@ double GranSubModNormalMDR::calculate_forces()
   //std::cout << gm->i << ", " << gm->j  << ", " << xi << ", " << xj << std::endl;
 
   // force magnifiers to prevent over penetration
-  double * deltao_offset0 = & history[deltao_offset_0];
-  double * deltao_offset1 = & history[deltao_offset_1];
-  const double wallForceMagnifer = std::exp(10.0*(*deltao_offset0)/Rinitial[gm->i] - 10.0) + 1.0;
-  const double forceMagnifer0 = std::exp(10.0*(*deltao_offset0)/Rinitial[i0] - 10.0) + 1.0;
-  const double forceMagnifer1 = std::exp(10.0*(*deltao_offset1)/Rinitial[i1] - 10.0) + 1.0;
+  double * deltao_offset = & history[deltao_offset_0];
+  const double wallForceMagnifer = std::exp(10.0*(*deltao_offset)/Rinitial[gm->i] - 10.0) + 1.0;
   //const double wallForceMagnifer = 1.0;
 
   // assign final force
@@ -1027,7 +1042,7 @@ double GranSubModNormalMDR::calculate_forces()
   if (gm->contact_type != PAIR) {
     F = wij*F0*wallForceMagnifer;
   } else {
-    F = wij*(F0*forceMagnifer0 + F1*forceMagnifer1)/2.0; 
+    F = wij*(F0 + F1)/2.0; 
   }
 
   //std::cout << F << ", " << F0 << ", " << F1 << " | " << R0 << ", " << R1 << std::endl;
@@ -1093,7 +1108,16 @@ double GranSubModNormalMDR::calculate_forces()
   //  csvWriter.writeRow(rowData);
   //}
 
+  //std:: cout << "The force F is: " << F  << std::endl;
+
   return F;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void GranSubModNormalMDR::set_fncrit()
+{
+  Fncrit = fabs(F);
 }
 
 //std::cout << sidata.i << ", " << sidata.j << ", " << R << ", " << deltan << ", " << deltao << ", " << dRsums_i[0] << ", " << dRsums_i[1] << ", " << numQuant << std::endl;

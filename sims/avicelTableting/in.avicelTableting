@@ -5,10 +5,10 @@ atom_modify map array
 comm_modify vel yes
 units si
 newton off
-neighbor      1.5e-3 bin
+neighbor      2.4e-3 bin
 neigh_modify every 10 delay 2000 check no 
-timestep 1.8e-7
-processors 2 2 1
+timestep 3e-7
+#processors 2 2 1
 
 ######################### SIMULATION BOUNDING BOX, INTEGRATION, AND, GRAVITY ###########################
 
@@ -17,7 +17,7 @@ read_data spheres.data
 
 ######################################### ADD DIE AND ATOM PARAMETERIZATION ##############################################
 
-variable atomRadius              equal 0.48e-3*1.5
+variable atomRadius              equal 0.8e-3*1.5
 variable atomDiameter            equal 2*${atomRadius}
 variable atomDensity             equal 1560 
 variable dieRadius               equal 4e-3
@@ -139,7 +139,7 @@ variable force atom sqrt(fx^2+fy^2+fz^2)
 
 fix log all print 1 "${sxx_ave} ${syy_ave} ${szz_ave} ${Vparticles} ${adh_length_ave}" file avgStresses.csv screen no
 dump dumpParticles all custom ${output_rate} avicelTableting.dump id type mass diameter x y z vx vy vz fx fy fz c_ke c_sigmaxx c_sigmayy c_sigmazz v_aMag v_force v_forceToAccelRatio
-dump dumpParticlesVTK all vtk ${output_rate} post/particles_*.vtk id x y z fx fy fz vx vy vz c_ke radius c_sigmaxx c_sigmayy c_sigmazz
+#dump dumpParticlesVTK all vtk ${output_rate} post/particles_*.vtk id x y z fx fy fz vx vy vz c_ke radius c_sigmaxx c_sigmayy c_sigmazz
 
 ######################################### RUN SIMULATION ##########################################
 

@@ -547,16 +547,6 @@ void PairGranular::init_style()
     modify->add_fix("fix_mdr_radius_update all mdr/radius/update");
     modify->add_fix("fix_mdr_mean_surf_disp all mdr/mean/surf/disp");
 
-    //const char * id_ifx = "my_id";
-    //fix_store = dynamic_cast<FixStoreAtom *>(modify->add_fix(fmt::format("{} {} STORE/ATOM 6 0 1 1", id_fix, group->names[igroup])));
-    //double **saved_stress = fix_store->astore;
-    //to write use:
-    //for (particle loop over i)    
-    //for (int a = 0; a < 6; a++)
-    //  saved_stress[i][a] = stress[i][a];
-    // f_my_id[0]
-    // f_psi_b[0]
-
     fix_flag = 1;
   }  
  }

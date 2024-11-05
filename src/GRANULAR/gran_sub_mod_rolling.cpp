@@ -78,12 +78,13 @@ void GranSubModRollingSDS::calculate_forces()
 
   Frcrit = mu * gm->normal_model->get_fncrit();
 
+  hist_temp[0] = gm->history[rhist0];
+  hist_temp[1] = gm->history[rhist1];
+  hist_temp[2] = gm->history[rhist2];
+
   //std::cout << "Frcrit rolling is: " << Frcrit << std::endl;
 
   if (gm->history_update) {
-    hist_temp[0] = gm->history[rhist0];
-    hist_temp[1] = gm->history[rhist1];
-    hist_temp[2] = gm->history[rhist2];
     rolldotn = dot3(hist_temp, gm->nx);
 
     frameupdate = (fabs(rolldotn) * k) > (EPSILON * Frcrit);

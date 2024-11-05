@@ -456,13 +456,13 @@ double GranSubModNormalMDR::calculate_forces()
   const double radi_true = gm->radi;      // true i particle initial radius
   const double radj_true = gm->radj;      // true j particle initial radius
     
-  //double F;                               // average force 
-  double F0;                              // force on contact side 0
-  double F1;                              // force on contact side 1
-  double R0;
-  double R1;
-  int i0;
-  int i1;
+  F = 0.0;                               // average force 
+  double F0 = 0.0;                              // force on contact side 0
+  double F1 = 0.0;                              // force on contact side 1
+  double R0 = 0.0;
+  double R1 = 0.0;
+  int i0 = 0;
+  int i1 = 0;
   double delta = gm->delta;               // apparent overlap
   
   //if (gm->contact_type == PAIR) delta = gm->delta/2.0; // half displacement to imagine interaction with rigid flat 
@@ -799,6 +799,7 @@ double GranSubModNormalMDR::calculate_forces()
         
           if ( aAdh < acrit ) {
             aAdh = 0.0;
+            F_MDR = 0.0;
           } else {
             // newton-raphson to find aAdh
             const double maxIterations = 100;

@@ -13,8 +13,8 @@ cylSize = [cyl_r,cyl_h];
 cylCenter = [0,0,cyl_h/2];
 
 % define number of particles and their radii
-N_goal = 20; %5000; %12000;  % goal for number of particles to insert
-R_min = 0.8e-3 %0.133e-3; %0.099e-3;
+N_goal = 400; %5000; %12000;  % goal for number of particles to insert
+R_min = 0.3e-3 %0.133e-3; %0.099e-3;
 R_max = R_min*2;
 R_factor = 2*R_min/60e-6;
 

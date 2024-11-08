@@ -5,9 +5,9 @@ atom_modify map array
 comm_modify vel yes
 units si
 newton off
-neighbor      0.9e-3 bin
+neighbor      0.3e-3 bin
 neigh_modify every 10 delay 2000 check no 
-timestep 1.2e-7
+timestep 1.2e-9
 processors 2 2 1
 
 ######################### SIMULATION BOUNDING BOX, INTEGRATION, AND, GRAVITY ###########################
@@ -17,9 +17,10 @@ read_data spheres.data
 
 ######################################### ADD DIE AND ATOM PARAMETERIZATION ##############################################
 
-variable atomRadius              equal 0.3e-3*1.5
+variable atomRadius              equal 0.099e-3*1.5
 variable atomDiameter            equal 2*${atomRadius}
 variable atomDensity             equal 1560 
+variable atomMassAvg             equal ${atomDensity}*4.0/3.0*PI*${atomRadius}^3.0
 variable dieRadius               equal 4e-3
 variable dieHeight               equal 1e-2
 
@@ -35,14 +36,15 @@ variable SurfaceEnergy equal 300
 variable SurfaceEnergyWall equal 0.0
 variable psi_b equal 0.5
 variable CoR equal 0.5
+variable beta equal -ln(${CoR})/sqrt(ln(${CoR})^2+PI^2)
 variable kt equal 2/7*${YoungsModulus}*${atomRadius}
 variable kt_wall equal 2/7*${YoungsModulus}*${atomRadius}
-variable xgammat equal 0.0
+variable xgammat equal 0.0 #${beta}*sqrt(${atomMassAvg}*${YoungsModulus}*${atomRadius})
 variable mu_s equal 0.95
 variable mu_s_wall equal 0.1
 variable mu_roll equal 0.85
 variable k_roll equal 2.25*${mu_roll}*${mu_roll}*${YoungsModulus}*${atomRadius}
-variable gamma_roll equal 0.0
+variable gamma_roll equal 0.0 #${beta}*sqrt(${atomMassAvg}*${YoungsModulus}*${atomRadius}) 
 
 pair_coeff * * mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEnergy} ${psi_b} ${CoR} damping none tangential linear_history ${kt} ${xgammat} ${mu_s} rolling sds ${k_roll} ${gamma_roll} ${mu_roll}
 #pair_coeff * * mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEnergy} ${psi_b} ${CoR} tangential linear_history ${kt} ${xgammat} ${mu_s} damping none
@@ -97,7 +99,6 @@ fix grav all gravity 9.81 vector 0 0 -1
 #variable aMag atom sqrt(v_ax*v_ax+v_ay*v_ay+v_az*v_az)
 #variable force atom sqrt(fx^2+fy^2+fz^2)
 #compute aMagAvg all reduce ave v_aMag
-
 #variable forceToAccelRatio atom v_force/(mass*v_aMag)
 
 compute       1 all erotate/sphere

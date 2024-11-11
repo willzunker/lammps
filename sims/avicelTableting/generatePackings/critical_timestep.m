@@ -4,7 +4,7 @@ clc
 
 % geometric and material inputs
 rho = 1560;   % density
-R = 0.099e-3;  % particle radius
+R = 0.48e-3;  % particle radius
 E = 9e9;      % Young's modulus
 nu = 0.3;     % Poisson's ratio
 Y = 1.5e6;    % Yield stress

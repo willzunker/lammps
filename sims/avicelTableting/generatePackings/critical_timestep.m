@@ -4,9 +4,9 @@ clc
 
 % geometric and material inputs
 rho = 1560;   % density
-R = 0.48e-3;  % particle radius
-E = 9e9;      % Young's modulus
-nu = 0.3;     % Poisson's ratio
+R = 0.0961e-3;  % particle radius
+E = 5e9;      % Young's modulus
+nu = 0.4;     % Poisson's ratio
 Y = 1.5e6;    % Yield stress
 
 % calculated values from inputs 
@@ -38,4 +38,14 @@ dt3 = sqrt(m/k3)
 %punchFactor = 0.6915;
 %max_compression_step = round(0.02/dt) + round(punchFactor*1e-2/0.25/dt)
 %neighbor = 1.75*R*1.5
+
+% relaxation time of damper
+
+CoR = 0.5;
+beta = -log(CoR)/(sqrt(log(CoR)^2 + pi^2));
+Eeff = E/(1-nu^2);
+tau = beta*R*sqrt(rho*Eeff)/Eeff
+
+
+
 

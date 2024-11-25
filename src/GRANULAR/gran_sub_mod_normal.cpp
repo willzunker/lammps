@@ -1034,8 +1034,8 @@ double GranSubModNormalMDR::calculate_forces()
 
   // force magnifiers to prevent over penetration
   double * deltao_offset = & history[deltao_offset_0];
-  const double wallForceMagnifer = std::exp(10.0*(*deltao_offset)/Rinitial[gm->i] - 10.0) + 1.0;
-  //const double wallForceMagnifer = 1.0;
+  //const double wallForceMagnifer = std::exp(10.0*(*deltao_offset)/Rinitial[gm->i] - 10.0) + 1.0;
+  const double wallForceMagnifer = 1.0;
 
   // assign final force
   //(gm->contact_type != PAIR) ? F = wij*F0*wallForceMagnifer : F = wij*(F0 + F1)/2;  // F = 2*wij*pow(1/F0 + 1/F1,-1);

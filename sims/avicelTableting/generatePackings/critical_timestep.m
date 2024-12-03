@@ -4,7 +4,7 @@ clc
 
 % geometric and material inputs
 rho = 1560;   % density
-R = 0.0961e-3;  % particle radius
+R = 0.44e-3;  % particle radius
 E = 5e9;      % Young's modulus
 nu = 0.4;     % Poisson's ratio
 Y = 1.5e6;    % Yield stress
@@ -32,6 +32,8 @@ k3 = 2*Eeff*Reff; % mdr unloading stiffness based on updated effective radius
 dt1 = sqrt(m/k1)
 dt2 = sqrt(m/k2)
 dt3 = sqrt(m/k3)
+
+dt4 = 0.35*sqrt(m/(R*kappa))
 
 %dt = sqrt(rho*R^2/(E))
 %dt = 0.8e-7;

@@ -150,7 +150,7 @@ variable output_rate equal round(${compression_steps}/100)
 ##################################### SET UP DUMP OUTPUTS  ####################################################
 
 #dump   dmp all vtk ${output_rate} post/triaxial14particles_*.vtk id type mass x y z vx vy vz fx fy fz radius 
-dump dumpParticles all custom ${output_rate} post/triaxial14particles.dump id type mass x y z vx vy vz fx fy fz radius
+dump dumpParticles all custom ${output_rate} triaxial14particles.dump id type mass x y z vx vy vz fx fy fz radius
 
 #################################### COMPRESS THE PARTICLES  ##################################################
 

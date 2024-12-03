@@ -1,7 +1,7 @@
-function create_moving_disk_stl_files(disp)
+function create_moving_disk_stl_files(zo,disp,stl_name)
     % Parameters
     radius = 4e-3;   % Radius of the disk
-    initial_z = 0.01; % Initial z-coordinate of the disk center
+    initial_z = zo; % Initial z-coordinate of the disk center
     num_points = 100; % Number of points to define the disk's circumference
 
     % Generate the points for the disk
@@ -26,7 +26,7 @@ function create_moving_disk_stl_files(disp)
         vertices(:, 3) = [0; z'] + current_z;
 
         % Create the STL file
-        stl_filename = sprintf('post/disk_%03d.stl', i);
+        stl_filename = sprintf('post/%s_%03d.stl', stl_name, i);
         create_stl_file(stl_filename, vertices, faces);
     end
 end

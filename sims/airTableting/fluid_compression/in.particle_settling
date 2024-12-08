@@ -1,0 +1,108 @@
+############################### SIMULATION SETTINGS ###################################################
+
+units si
+atom_style sphere
+atom_modify map array
+atom_modify first big
+boundary p p p   
+newton on
+
+############################################ ADD IN BIG PARTICLES #####################################
+
+read_data particle_settling.data 
+variable radius_big equal 0.4e-3
+variable density_big equal 1560
+
+############################### PROPERTIES THAT AFFECT FLUID BEHVAVIOR #################################
+
+timestep 2e-7
+variable 		num_mpcd equal 300000
+variable 		mass_mpcd equal 4/3*PI*${radius_big}^3*${density_big}*3e-4
+variable 		mpcd_grid_size equal 2*${radius_big}/4
+variable 		temp_mpcd equal 1.565641e16
+variable 		N_reset equal 25
+
+############################### ADD IN MPCD PARTICLES ###################################################
+
+variable die_xh equal  2e-3
+variable die_xl equal -2e-3
+variable die_yh equal  2e-3
+variable die_yl equal -2e-3
+variable die_zh equal  4e-2
+variable die_zl equal  0.0
+
+variable diameter_mpcd equal 2*${radius_big}/50
+variable velocity_mpcd equal ${radius_big}/(5*dt)
+
+region         insert_mpcd block ${die_xl} ${die_xh} ${die_yl} ${die_yh} ${die_zl} ${die_zh}
+create_atoms   2 random ${num_mpcd} 13214 insert_mpcd
+
+############################### REMOVE OVERLAPS BETWEEN BIG AND SMALL ####################################
+
+variable skin_dis equal 2*${radius_big}*0.3
+variable cutoff_dis equal 3.5*${radius_big}
+variable overlap_delete equal 2*${radius_big}*0.6
+
+group		   big type 1
+group		   small type 2
+set		       group small mass ${mass_mpcd} 
+set            group small diameter ${diameter_mpcd}
+
+neighbor       ${skin_dis} multi
+comm_modify	    mode multi group big vel yes
+
+pair_style	   granular 
+pair_coeff	   1 1 hooke 1e3 1e2 tangential linear_nohistory 1.0 0.4 
+pair_coeff	   2 2 hooke 1e3 1e2 tangential linear_nohistory 1.0 0.4  
+pair_coeff	   1 2 hooke 1e3 1e2 tangential linear_nohistory 1.0 0.4  
+
+neigh_modify   one 10000
+neigh_modify   page 100000
+delete_atoms   overlap ${overlap_delete} small big
+
+############################### SET INTERACTIONS BETWEEN ATOMS ####################################
+
+velocity	    small create ${velocity_mpcd} 87287 loop geom
+
+neighbor	    ${skin_dis} multi
+neigh_modify	delay 0 every 1 check yes 
+neigh_modify	include big
+
+pair_style	   granular 
+pair_coeff	   1 1 hooke 1e3 1e2 tangential linear_nohistory 1.0 0.4 cutoff ${cutoff_dis}
+pair_coeff	   2 2 hooke 1e3 1e2 tangential linear_nohistory 1.0 0.4 cutoff 0.0
+pair_coeff	   1 2 hooke 1e3 1e2 tangential linear_nohistory 1.0 0.4 cutoff 0.0
+
+fix             1a big nve/sphere
+
+variable g_mpcd equal 14883.643970*9.81
+fix             5 big gravity ${g_mpcd} vector 0 0 -1
+
+############################### DEFINE MPCD PARTICLE PROPERTIES ###################################
+
+fix	            2a small srd ${N_reset} big ${temp_mpcd} ${mpcd_grid_size} 3122 &
+		        cubic warn 0.0001 shift yes 49829 &
+		        overlap yes collision noslip tstat yes bounce 10 inside ignore
+#fix		        3 all wall/srd xlo ${die_xl} xhi ${die_xh} ylo ${die_yl} yhi ${die_yh} zlo ${die_zl} zhi ${die_zh}
+
+######################################### RUN SIMULATION ##########################################
+
+variable output_rate equal round(1e-4/dt)
+thermo		    100
+thermo_style	custom step atoms ke press
+thermo_modify   lost ignore
+dump            1 all custom ${output_rate} particle_settling.dump id type mass diameter x y z vx vy vz
+
+variable velz equal vz[1]
+variable time_elapsed equal elapsed*dt
+fix log all print 1 "${time_elapsed} ${velz}" file particle_settle_velocity_time.csv screen no
+
+variable settle_time equal 0.002
+variable settle_steps equal round(${settle_time}/dt)
+
+##### settle_steps #####
+
+run             ${settle_steps}
+
+	
+

@@ -1,0 +1,138 @@
+############################### SIMULATION SETTINGS ###################################################
+
+atom_style sphere 
+atom_modify map array 
+comm_modify vel yes
+units si
+newton off
+neighbor      6 bin
+neigh_modify  delay 0
+timestep 0.001
+
+######################### SIMULATION BOUNDING BOX, INTEGRATION, AND, GRAVITY ###########################
+
+boundary f f f
+region simBox block -100 100 -100 100 -100 100
+create_box 2 simBox
+
+########################### PARTICLE MATERIAL PROPERTIES AND FORCE MODEL ###############################
+
+variable d equal 20
+variable den equal 1000
+
+pair_style granular
+# E, nu, Y, gamma, psi_b, CoR
+pair_coeff * * mdr 5e8 0.3 25e6 0.0 0.08 1.0 tangential linear_nohistory 0.0 0.0
+
+##################################### DEFINE RUN CONTROL VARIBLES  #############################################
+
+# Linear movement
+variable mydt equal dt
+variable mystep equal step
+variable mytime equal ${mydt}*v_mystep
+variable ddelta equal ${d}/2000
+variable slope equal ${ddelta}/${mydt}
+variable disp equal ${slope}*v_mytime
+variable disp_neg equal -v_disp
+variable vel equal ${ddelta}/${mydt}
+variable vel_neg equal -${vel}
+variable zeroDisp equal 0.0
+
+variable deltaI     equal 1.25
+variable deltaII    equal 3.0
+variable deltaIII   equal 4.75
+variable deltaIV    equal 6.25
+
+variable stepsIload equal ${deltaI}/${ddelta}
+variable stepsIunload equal ${stepsIload}+${deltaI}/${ddelta} 
+variable stepsIIload equal ${stepsIunload}+${deltaII}/${ddelta}
+variable stepsIIunload equal ${stepsIIload}+${deltaII}/${ddelta} 
+variable stepsIIIload equal ${stepsIIunload}+${deltaIII}/${ddelta}
+variable stepsIIIunload equal ${stepsIIIload}+${deltaIII}/${ddelta} 
+variable stepsIVload equal ${stepsIIIunload}+${deltaIV}/${ddelta}
+variable stepsIVunload equal ${stepsIVload}+${deltaIV}/${ddelta} 
+
+variable untrigIload equal 1.0-0.5*(1.0+sign(v_mystep-${stepsIload}))
+
+variable sign_input1 equal v_mystep
+variable sign_input2 equal ${stepsIload}
+variable sign_of_inputs equal sign(v_mystep-${stepsIload})
+
+variable trigIunload equal 0.5*(1+sign(v_mystep-${stepsIload}))
+variable untrigIunload equal 1.0-0.5*(1.0+sign(v_mystep-${stepsIunload}))
+
+variable trigIIload equal 0.5*(1.0+sign(v_mystep-${stepsIunload}))
+variable untrigIIload equal 1.0-0.5*(1.0+sign(v_mystep-${stepsIIload}))
+
+variable trigIIunload equal 0.5*(1.0+sign(v_mystep-${stepsIIload}))
+variable untrigIIunload equal 1.0-0.5*(1.0+sign(v_mystep-${stepsIIunload}))
+
+variable trigIIIload equal 0.5*(1.0+sign(v_mystep-${stepsIIunload}))
+variable untrigIIIload equal 1.0-0.5*(1.0+sign(v_mystep-${stepsIIIload}))
+    
+variable trigIIIunload equal 0.5*(1.0+sign(v_mystep-${stepsIIIload}))
+variable untrigIIIunload equal 1.0-0.5*(1.0+sign(v_mystep-${stepsIIIunload}))
+
+variable trigIVload equal 0.5*(1.0+sign(v_mystep-${stepsIIIunload}))
+variable untrigIVload equal 1.0-0.5*(1.0+sign(v_mystep-${stepsIVload}))
+    
+variable trigIVunload equal 0.5*(1.0+sign(v_mystep-${stepsIVload}))
+variable untrigIVunload equal 1.0-0.5*(1.0+sign(v_mystep-${stepsIVunload}))
+
+variable disp1 equal v_disp*v_untrigIload
+variable disp2 equal (v_disp_neg+2*${deltaI})*v_trigIunload*v_untrigIunload 
+variable disp3 equal (v_disp-2*${deltaI})*v_trigIIload*v_untrigIIload
+variable disp4 equal (v_disp_neg+2*(${deltaI}+${deltaII}))*v_trigIIunload*v_untrigIIunload
+variable disp5 equal (v_disp-2*(${deltaI}+${deltaII}))*v_trigIIIload*v_untrigIIIload
+variable disp6 equal (v_disp_neg+2*(${deltaI}+${deltaII}+${deltaIII}))*v_trigIIIunload*v_untrigIIIunload
+variable disp7 equal (v_disp-2*(${deltaI}+${deltaII}+${deltaIII}))*v_trigIVload*v_untrigIVload
+variable disp8 equal (v_disp_neg+2*(${deltaI}+${deltaII}+${deltaIII}+${deltaIV}))*v_trigIVunload*v_untrigIVunload
+
+variable plane_disp equal v_disp1+v_disp2+v_disp3+v_disp4+v_disp5+v_disp6+v_disp7+v_disp8
+variable plane_disp_neg equal -v_plane_disp
+
+#fix log all print 1 "${plane_disp},${plane_disp_neg},${mystep},${disp},${disp1},${disp2},${disp3},${disp4},${disp5},${disp6},${disp7},${disp8}" file uniaxialCompression.csv title "plane_disp,plane_disp_neg,step,disp,disp1,disp2,disp3,disp4,disp5,disp6,disp7,disp8" screen no
+#fix log2 all print 1 "${untrigIload},${trigIunload},${untrigIunload},${trigIIload},${untrigIIload}" file uniaxialCompression2.csv title "I,II,III,IIV,IV" screen no
+#fix log3 all print 1 "${sign_input1},${sign_input2},${sign_of_inputs}" file uniaxialCompression3.csv title "I,II,III" screen no
+
+######################################### ADD IN PLANES ################################################
+
+region plane_yz_pos plane 10 0 0 -1 0 0 side in move v_plane_disp_neg NULL NULL units box
+region plane_yz_neg plane -10 0 0 1 0 0 side in move v_plane_disp NULL NULL units box
+
+variable wall_contact_string string "granular mdr 5e8 0.3 25e6 0.0 0.08 1.0 tangential linear_nohistory 0.0 0.0"
+
+fix plane_yz_pos all wall/gran/region ${wall_contact_string} region plane_yz_pos contacts
+fix plane_yz_neg all wall/gran/region ${wall_contact_string} region plane_yz_neg contacts
+
+##################################### INSERT PARTICLES ####################################################
+
+create_atoms 1 single 0 0 0 units box
+group centerAtom id 1
+set atom 1 diameter ${d} density ${den} 
+
+fix cAtom centerAtom move variable v_zeroDisp NULL NULL NULL NULL NULL units box 
+
+######################################## SCREEN OUTPUT  ####################################################
+
+compute       1 all erotate/sphere
+thermo_style  custom dt step atoms ke c_1 vol 
+thermo        1000
+thermo_modify lost ignore norm no
+
+##################################### SET UP DUMP OUTPUTS  ####################################################
+
+dump dumpParticles all vtk 1 post/particles_*.vtk x y z fx fy fz 
+#dump 1 all custom 1 uniaxialCompression id type f_plane_yz_neg[*]
+
+variable ax_yz_neg atom f_plane_yz_neg[5]
+variable afx_yz_neg atom f_plane_yz_neg[2]
+variable xpos equal v_ax_yz_neg[1]
+variable delta equal ${d}/2+v_xpos
+variable fx_neg equal v_afx_yz_neg[1]
+fix log all print 1 "${delta} ${fx_neg}" file uniaxialCompression.csv title "del,fx_yz_neg" screen no
+
+######################################### BEGIN RUN  ##########################################################
+
+run ${stepsIVunload} upto
+

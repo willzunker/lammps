@@ -1,0 +1,126 @@
+
+############################### SIMULATION SETTINGS ###################################################
+
+atom_style      granular
+atom_modify     map array
+communicate     single vel yes
+soft_particles  no
+hard_particles  yes
+units           si
+newton          off
+neighbor        0.6e-3 bin
+neigh_modify    delay 0
+timestep        1e-7
+
+######################### SIMULATION BOUNDING BOX, INTEGRATION, AND, GRAVITY ###########################
+
+boundary        f f f
+region          reg cylinder z 0 0 0.04 -0.04 0.04 units box
+create_box      2 reg
+fix   	        gravi all gravity 9.81 vector 0.0 0.0 -1.0
+fix             integr all nve/sphere
+
+########################### PARTICLE MATERIAL PROPERTIES AND FORCE MODEL ###############################
+
+fix         m1 all property/global youngsModulus peratomtype 1e10 1e10
+fix         m2 all property/global poissonsRatio peratomtype 0.3 0.3
+fix         m3 all property/global yieldStress peratomtype 1.7e8 1.7e8
+fix         m4 all property/global gamma peratomtype 250 250
+fix         m5 all property/global coefficientRestitution peratomtypepair 2 0.5 0.5 0.5 0.5
+fix         m6 all property/global coefficientFriction peratomtypepair 2 0.7 0.7 0.7 0.7
+fix         m7 all property/global characteristicVelocity scalar 2.0
+fix         m8 all property/global coefficientRollingFriction peratomtypepair 2 0.55 0.55 0.55 0.55
+fix         m9 all property/global coefficientRollingViscousDamping peratomtypepair 2 0.0 0.0 0.0 0.0
+
+pair_style  gran model mdr tangential history rolling_friction epsd adhesion off torsionTorque on
+#pair_style  gran model mdr tangential history adhesion off 
+#pair_style  gran model mdr 
+pair_coeff  * *
+
+############################### IMPORT PUNCH & DIE MESHES ################################################
+
+fix     die all mesh/surface/stress file meshes/die.stl type 1 stress on
+fix     punch all mesh/surface/stress file meshes/punch.stl type 1 stress on
+fix     lowerPlate all mesh/surface/stress file meshes/lowerPlate.stl type 1 stress on
+fix     diePunchWalls all wall/gran model mdr tangential history rolling_friction epsd mesh n_meshes 3 meshes die punch lowerPlate adhesion off torsionTorque on
+#fix     diePunchWalls all wall/gran model mdr tangential history mesh n_meshes 2 meshes die punch adhesion off
+#fix     diePunchWalls all wall/gran model mdr mesh n_meshes 2 meshes die punch
+
+variable zForceOnPunch equal f_punch[3]
+variable zDispOfPunch equal  f_punch[9]
+variable zForceOnLowerPlate equal f_lowerPlate[3]
+fix log all print 1 "${zDispOfPunch},${zForceOnPunch},${zForceOnLowerPlate}" file punchForce.csv title "zDispOfPunch,zForceOnPunch,zForceOnLowerPlate" screen no
+
+##################################### INSERT PARTICLES ####################################################
+
+variable numberOfAtoms           equal 5000
+variable atomRadius              equal 0.2e-3
+variable atomRadiusII            equal 1.2*${atomRadius}
+variable atomRadiusIII           equal 0.8*${atomRadius}
+variable atomDensity             equal 1560 
+variable dieRadius               equal 4e-3
+variable dieHeight               equal 1e-2
+variable insertionRadius         equal ${dieRadius}-1.5*${atomRadius}
+variable insertionLowerBound     equal 1.5*${atomRadius}
+variable insertionUpperBound     equal ${dieHeight}-1.5*${atomRadius}
+
+region  atomInsertionRegion cylinder z 0 0 ${insertionRadius} ${insertionLowerBound} ${insertionUpperBound} units box
+
+#distributions for insertion
+fix  pts1 all particletemplate/sphere 15485863 atom_type 1 density constant ${atomDensity} radius constant ${atomRadius}
+fix  pts2 all particletemplate/sphere 15485867 atom_type 1 density constant ${atomDensity} radius constant ${atomRadiusII}
+fix  pts3 all particletemplate/sphere 67867967 atom_type 1 density constant ${atomDensity} radius constant ${atomRadiusIII}
+fix  pdd1 all particledistribution/discrete 32452843  3 pts1 0.5 pts2 0.25 pts3 0.25 
+fix  ins1 all insert/pack seed 49979687 distributiontemplate pdd1 vel constant 0. 0. 0. insert_every once overlapcheck yes all_in no particles_in_region ${numberOfAtoms} region atomInsertionRegion
+
+#fix     pts1 all particletemplate/sphere 15485863 atom_type 1 density constant ${atomDensity} radius constant ${atomRadius}
+#fix     pdd1 all particledistribution/discrete 15485867 1 pts1 1.0
+#fix     ins1 all insert/pack seed 49979687 distributiontemplate pdd1 vel constant 0. 0. 0. insert_every once overlapcheck yes all_in no particles_in_region ${numberOfAtoms} region atomInsertionRegion
+######################################## SCREEN OUTPUT  ####################################################
+
+compute         rke all erotate/sphere
+thermo_style    custom step atoms ke c_rke vol f_punch[8]
+thermo          1000
+thermo_modify   lost ignore norm no
+compute_modify  thermo_temp dynamic yes
+
+##################################### SET UP DUMP OUTPUTS  ####################################################
+
+#dump    dmpgrains all custom 5000 post/dumper/dump.liggghts_init_* id type x y z ix iy iz vx vy vz fx fy fz omegax omegay omegaz radius
+#dump    dmpstl all mesh/stl 5000 post/dumper/surfaces_*.stl
+dump	dmpGRAINS all custom/vtk 5000 post/vtk/grains_*.vtk id type type x y z ix iy iz vx vy vz fx fy fz omegax omegay omegaz radius
+dump 	dumpSTL all mesh/stl 5000 post/vtk/surfaces_*.stl
+
+##################################### DEFINE RUN CONTROL VARIBLES  #############################################
+
+variable settlingSteps equal 500000
+variable zInitalPunchPosition equal ${dieHeight} 
+variable zFinalPunchPosition  equal ${dieHeight}*0.4175
+variable compressionStartStep equal ${settlingSteps}
+variable compressionEndStep equal 1500000
+variable ejectionEndStep equal 2000000
+variable freeFloatEndStep equal 2250000
+
+variable punchAmplitude equal -(${zInitalPunchPosition}-${zFinalPunchPosition})
+variable punchFrequency equal PI/2/(dt*(${compressionEndStep}-${compressionStartStep})/2)
+variable punchShift equal ${compressionStartStep}*dt
+variable zPunchDisplacement equal -${punchAmplitude}*sin(${punchFrequency}*(step*dt-${punchShift}))
+variable punchPeriod equal 2*PI/${punchFrequency}
+
+variable lowerPlatePeriod equal ${punchPeriod}
+variable lowerPlateAmplitude equal ${dieHeight}
+
+############################### BEGIN RUN, ALLOW GRAINS TO SETTLE  #############################################
+
+run ${settlingSteps}
+
+####################################### COMPRESS THE POWDER  ###################################################
+ 
+fix         movePunch all move/mesh mesh punch wiggle amplitude 0.0 0.0 ${punchAmplitude} period ${punchPeriod} 
+run     	${compressionEndStep} upto
+
+fix         moveLowerPlate all move/mesh mesh lowerPlate wiggle amplitude 0.0 0.0 ${lowerPlateAmplitude} period ${lowerPlatePeriod} 
+run ${ejectionEndStep} upto
+
+unfix movePunch
+run ${freeFloatEndStep} upto

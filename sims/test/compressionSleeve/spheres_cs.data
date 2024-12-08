@@ -1,0 +1,13 @@
+#LAMMPS data file created by PyMu. 
+2 atoms
+
+2 atom types
+
+-30 30 xlo xhi
+-10 10 ylo yhi
+-10 10 zlo zhi
+
+Atoms
+
+1 1 20 1.5e3 0 0 0 0 0 0
+2 1 20 1.5e3 20 0 0 0 0 0

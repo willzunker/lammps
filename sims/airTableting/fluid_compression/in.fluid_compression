@@ -1,0 +1,42 @@
+units		   si
+atom_style	   sphere
+boundary       f f f 
+region         box block 0 10 0 10 0 10
+create_box 1   box
+
+variable N_small equal 40000
+create_atoms   1 random ${N_small} 13214 box
+
+group		   small type 1
+set		       group small mass 0.001 
+set            group small diameter 0.2
+
+
+velocity	    small create 0.001 87287 loop geom
+
+timestep	    1e-4
+
+variable        compression_steps equal 10000
+variable        delta_wall equal 0.5*($(zhi)-$(zlo))
+variable        disp equal -elapsed/${compression_steps}*${delta_wall}
+variable        wall_hi equal 10+v_disp
+variable        wall_lo equal 0 
+
+variable mpcd_temp equal 1e21
+fix	            2 small srd 20 NULL ${mpcd_temp} 0.4 3122 &
+		        cubic warn 0.0001 shift yes 49829 &
+		        overlap yes collision noslip tstat yes bounce 10 inside ignore
+fix		        3 all wall/srd xlo 0 xhi 10 ylo 0 yhi 10 zlo v_wall_lo zhi v_wall_hi
+
+
+thermo		    100
+thermo_style	custom step atoms ke press
+thermo_modify   lost ignore
+dump            1 all custom 100 fluid_compression.dump id type mass diameter x y z vx vy vz
+
+variable p equal press
+fix log all print 1 "${wall_hi} ${p} ${N_small} ${mpcd_temp}" file eqn_of_state.csv screen no
+
+
+run             ${compression_steps}
+

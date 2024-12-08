@@ -1,0 +1,199 @@
+############################### SIMULATION SETTINGS ###################################################
+
+atom_style sphere 
+atom_modify map array 
+comm_modify vel yes
+units si
+newton off
+neighbor      100 bin
+neigh_modify  delay 0
+timestep 1e-3
+
+######################### SIMULATION BOUNDING BOX, INTEGRATION, AND, GRAVITY ###########################
+
+boundary f f f
+region simBox block -100 100 -100 100 -100 100
+create_box 2 simBox
+fix 1 all nve/sphere
+
+########################### PARTICLE MATERIAL PROPERTIES AND FORCE MODEL ###############################
+
+variable d equal 20
+variable den equal 1e3
+
+pair_style granular
+# E, nu, Y, gamma, psi_b, CoR
+pair_coeff * * mdr 5e8 0.3 25e6 0.0 0.08 1.0 tangential linear_nohistory 0.0 0.0 damping none
+
+##################################### DEFINE RUN CONTROL VARIBLES  #############################################
+
+# Linear movement
+variable mydt equal dt
+variable mystep equal step
+variable mytime equal ${mydt}*v_mystep
+variable ddelta equal ${d}/200
+variable slope equal ${ddelta}/${mydt}
+variable disp equal ${slope}*v_mytime
+variable disp_neg equal -v_disp
+variable vel equal ${ddelta}/${mydt}
+variable vel_neg equal -${vel}
+variable zeroDisp equal 0.0
+
+variable deltaI     equal 2.0
+variable deltaII    equal 5.0
+variable deltaIII   equal 8.0
+variable deltaIV    equal 11
+
+variable stepsIload equal ${deltaI}/${ddelta}
+variable stepsIunload equal ${stepsIload}+${deltaI}/${ddelta} 
+variable stepsIIload equal ${stepsIunload}+${deltaII}/${ddelta}
+variable stepsIIunload equal ${stepsIIload}+${deltaII}/${ddelta} 
+variable stepsIIIload equal ${stepsIIunload}+${deltaIII}/${ddelta}
+variable stepsIIIunload equal ${stepsIIIload}+${deltaIII}/${ddelta} 
+variable stepsIVload equal ${stepsIIIunload}+${deltaIV}/${ddelta}
+variable stepsIVunload equal ${stepsIVload}+${deltaIV}/${ddelta} 
+
+variable untrigIload equal 1.0-0.5*(1.0+sign(v_mystep-${stepsIload}))
+
+variable sign_input1 equal v_mystep
+variable sign_input2 equal ${stepsIload}
+variable sign_of_inputs equal sign(v_mystep-${stepsIload})
+
+variable trigIunload equal 0.5*(1+sign(v_mystep-${stepsIload}))
+variable untrigIunload equal 1.0-0.5*(1.0+sign(v_mystep-${stepsIunload}))
+
+variable trigIIload equal 0.5*(1.0+sign(v_mystep-${stepsIunload}))
+variable untrigIIload equal 1.0-0.5*(1.0+sign(v_mystep-${stepsIIload}))
+
+variable trigIIunload equal 0.5*(1.0+sign(v_mystep-${stepsIIload}))
+variable untrigIIunload equal 1.0-0.5*(1.0+sign(v_mystep-${stepsIIunload}))
+
+variable trigIIIload equal 0.5*(1.0+sign(v_mystep-${stepsIIunload}))
+variable untrigIIIload equal 1.0-0.5*(1.0+sign(v_mystep-${stepsIIIload}))
+    
+variable trigIIIunload equal 0.5*(1.0+sign(v_mystep-${stepsIIIload}))
+variable untrigIIIunload equal 1.0-0.5*(1.0+sign(v_mystep-${stepsIIIunload}))
+
+variable trigIVload equal 0.5*(1.0+sign(v_mystep-${stepsIIIunload}))
+variable untrigIVload equal 1.0-0.5*(1.0+sign(v_mystep-${stepsIVload}))
+    
+variable trigIVunload equal 0.5*(1.0+sign(v_mystep-${stepsIVload}))
+variable untrigIVunload equal 1.0-0.5*(1.0+sign(v_mystep-${stepsIVunload}))
+
+variable disp1 equal v_disp*v_untrigIload
+variable disp2 equal (v_disp_neg+2*${deltaI})*v_trigIunload*v_untrigIunload 
+variable disp3 equal (v_disp-2*${deltaI})*v_trigIIload*v_untrigIIload
+variable disp4 equal (v_disp_neg+2*(${deltaI}+${deltaII}))*v_trigIIunload*v_untrigIIunload
+variable disp5 equal (v_disp-2*(${deltaI}+${deltaII}))*v_trigIIIload*v_untrigIIIload
+variable disp6 equal (v_disp_neg+2*(${deltaI}+${deltaII}+${deltaIII}))*v_trigIIIunload*v_untrigIIIunload
+variable disp7 equal (v_disp-2*(${deltaI}+${deltaII}+${deltaIII}))*v_trigIVload*v_untrigIVload
+variable disp8 equal (v_disp_neg+2*(${deltaI}+${deltaII}+${deltaIII}+${deltaIV}))*v_trigIVunload*v_untrigIVunload
+
+variable atomDisp equal v_disp1+v_disp2+v_disp3+v_disp4+v_disp5+v_disp6+v_disp7+v_disp8
+#variable atomDisp equal v_disp1
+variable atomDisp_neg equal -v_atomDisp
+
+variable plane_disp equal 1.5*v_atomDisp
+variable plane_disp_neg equal -v_plane_disp
+
+######################################### ADD IN PLANES ################################################
+
+region plane_yz_pos plane 30 0 0 -1 0 0 side in move v_plane_disp_neg NULL NULL units box
+region plane_yz_neg plane -30 0 0 1 0 0 side in move v_plane_disp NULL NULL units box
+region plane_xz_pos plane 0 10 0 0 -1 0 side in units box
+region plane_xz_neg plane 0 -10 0 0 1 0 side in units box
+region plane_xy_pos plane 0 0 10 0 0 -1 side in units box
+region plane_xy_neg plane 0 0 -10 0 0 1 side in units box
+
+variable wall_contact_string string "granular mdr 5e8 0.3 25e6 0.0 0.08 1.0 tangential linear_nohistory 0.0 0.0 damping none"
+
+fix plane_yz_pos all wall/gran/region ${wall_contact_string} region plane_yz_pos contacts
+fix plane_yz_neg all wall/gran/region ${wall_contact_string} region plane_yz_neg contacts
+fix plane_xz_pos all wall/gran/region ${wall_contact_string} region plane_xz_pos contacts
+fix plane_xz_neg all wall/gran/region ${wall_contact_string} region plane_xz_neg contacts
+fix plane_xy_pos all wall/gran/region ${wall_contact_string} region plane_xy_pos contacts
+fix plane_xy_neg all wall/gran/region ${wall_contact_string} region plane_xy_neg contacts
+
+##################################### INSERT PARTICLES ####################################################
+
+create_atoms 1 single 0 0 0 units box
+group centerAtom id 1
+set atom 1 diameter ${d} density ${den} 
+
+create_atoms 1 single ${d} 0 0 units box
+group xPosAtom id 2
+set atom 2 diameter ${d} density ${den} 
+
+create_atoms 1 single -${d} 0 0 units box
+group xNegAtom id 3
+set atom 3 diameter ${d} density ${den} 
+
+fix cAtom centerAtom move variable v_zeroDisp NULL NULL NULL NULL NULL units box 
+fix xPosAtom xPosAtom move variable v_atomDisp_neg NULL NULL NULL NULL NULL units box
+fix xNegAtom xNegAtom move variable v_atomDisp NULL NULL NULL NULL NULL units box
+
+######################################## SCREEN OUTPUT  ####################################################
+
+compute       1 all erotate/sphere
+thermo_style  custom dt step atoms ke c_1 vol 
+thermo        1000
+thermo_modify lost ignore norm no
+
+##################################### SET UP DUMP OUTPUTS  ####################################################
+
+dump dumpParticles all vtk 1 post/particles_*.vtk x y z fx fy fz radius
+
+# Displacements
+variable ax_yz_pos atom f_plane_yz_pos[5]
+variable ax_yz_neg atom f_plane_yz_neg[5]
+variable xpos_top equal v_ax_yz_pos[2]
+variable xpos_bot equal v_ax_yz_neg[3]
+variable delta_top_plate equal ${d}/2-(v_xpos_top-x[2])
+variable delta_bot_plate equal ${d}/2-(x[3]-v_xpos_bot)
+variable delta_cen_top equal ${d}-(x[2]-x[1])
+variable delta_cen_bot equal ${d}-(x[1]-x[3])
+
+# Per atom wall forces
+variable afx_yz_pos atom f_plane_yz_pos[2]
+variable afx_yz_neg atom f_plane_yz_neg[2]
+variable afy_xz_pos atom f_plane_xz_pos[3]
+variable afy_xz_neg atom f_plane_xz_neg[3]
+variable afz_xy_pos atom f_plane_xy_pos[4]
+variable afz_xy_neg atom f_plane_xy_neg[4]
+
+# Center atom wall forces
+variable fy_pos_cen equal v_afy_xz_pos[1]
+variable fy_neg_cen equal v_afy_xz_neg[1]
+variable fz_pos_cen equal v_afz_xy_pos[1]
+variable fz_neg_cen equal v_afz_xy_neg[1]
+
+# Top atom wall forces
+variable fx_pos_top equal v_afx_yz_pos[2]
+variable fy_pos_top equal v_afy_xz_pos[2]
+variable fy_neg_top equal v_afy_xz_neg[2]
+variable fz_pos_top equal v_afz_xy_pos[2]
+variable fz_neg_top equal v_afz_xy_neg[2]
+
+# Bottom atom wall forces
+variable fx_neg_bot equal v_afx_yz_neg[3]
+variable fy_pos_bot equal v_afy_xz_pos[3]
+variable fy_neg_bot equal v_afy_xz_neg[3]
+variable fz_pos_bot equal v_afz_xy_pos[3]
+variable fz_neg_bot equal v_afz_xy_neg[3]
+
+fix log1 all print 1 "${delta_cen_top} ${delta_cen_bot} ${fy_pos_cen} ${fy_neg_cen} ${fz_pos_cen} ${fz_neg_cen}" file compressionSleeveCenAtom.csv title "delta_cen_top,delta_cen_bot,fy_pos,fy_neg,fz_pos,fz_neg" screen no
+fix log2 all print 1 "${delta_top_plate} ${fx_pos_top} ${fy_pos_top} ${fy_neg_top} ${fz_pos_top} ${fz_neg_top}" file compressionSleeveTopAtom.csv title "delta_wall,fx_neg,fy_pos,fy_neg,fz_pos,fz_neg" screen no
+fix log3 all print 1 "${delta_bot_plate} ${fx_neg_bot} ${fy_pos_bot} ${fy_neg_bot} ${fz_pos_bot} ${fz_neg_bot}" file compressionSleeveBotAtom.csv title "delta_wall,fx_neg,fy_pos,fy_neg,fz_pos,fz_neg" screen no
+
+#compute pl all pair/local dist fx fy fz
+#dump pairLocal all local 1 tmp.dump index c_pl[1] c_pl[2] c_pl[3] c_pl[4] 
+
+#variable cpl1 equal c_pl[1][1]
+#variable cpl2 equal c_pl[2][1]
+#variable cpl3 equal c_pl[3][1]
+
+#fix log all print 1 "${cpl1} ${cpl2} ${cpl3}" file compressionSleevePairLocal.csv title "dist,fx,fy" screen no
+
+######################################### BEGIN RUN  ##########################################################
+
+run ${stepsIVunload} upto

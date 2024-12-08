@@ -1,0 +1,118 @@
+############################### SIMULATION SETTINGS ###################################################
+
+atom_style sphere 
+atom_modify map array 
+comm_modify vel yes
+units si
+newton off
+neighbor      2e-3 bin
+neigh_modify  delay 1
+timestep 1e-6
+
+######################### SIMULATION BOUNDING BOX, INTEGRATION, AND, GRAVITY ###########################
+
+boundary f f f
+region simBox block -0.05 0.05 -0.05 0.05 -0.05 0.05 units box
+create_box 1 simBox
+
+########################### PARTICLE MATERIAL PROPERTIES AND FORCE MODEL ###############################
+
+pair_style granular
+# E, nu, Y, gamma, psi_b, CoR
+pair_coeff * * mdr 1e8 0.3 1e6 0.0 0.08 0.8 tangential linear_nohistory 0.0 0.0
+
+######################################### ADD DIE AND ATOM PARAMETERIZATION ##############################################
+
+variable numberOfAtoms           equal 100
+variable atomRadius              equal 1e-3
+variable atomDiameter            equal 2*${atomRadius}
+variable atomDiameterLow         equal 0.8*${atomDiameter}
+variable atomDiameterHigh        equal 1.2*${atomDiameter}
+variable atomDensity             equal 1560 
+variable dieRadius               equal 4e-3
+variable dieHeight               equal 1e-2
+variable insertionRadius         equal ${dieRadius}-1.5*${atomRadius}
+variable insertionLowerBound     equal 1.5*${atomRadius}
+variable insertionUpperBound     equal ${dieHeight}-1.5*${atomRadius}
+
+region  atomInsertionRegion cylinder z 0 0 ${insertionRadius} ${insertionLowerBound} ${insertionUpperBound} side in units box
+
+##################################### DEFINE RUN CONTROL VARIBLES  #############################################
+
+variable settlingSteps equal 50000
+variable zInitalPunchPosition equal ${dieHeight} 
+variable zFinalPunchPosition  equal ${dieHeight}*0.35
+variable compressionStartStep equal ${settlingSteps}
+variable compressionEndStep equal 150000
+variable ejectionEndStep equal 200000
+variable freeFloatEndStep equal 225000
+
+variable punchAmplitude equal -(${zInitalPunchPosition}-${zFinalPunchPosition})
+variable punchFrequency equal PI/2/(dt*(${compressionEndStep}-${compressionStartStep})/2)
+variable punchShift equal ${compressionStartStep}*dt
+variable triggerPunchMovement equal 0.5*(1.0+sign(step-${compressionStartStep}))
+variable zPunchDisplacement equal v_triggerPunchMovement*(-${punchAmplitude}*sin(${punchFrequency}*(step*dt-${punchShift})))
+variable punchPeriod equal 2*PI/${punchFrequency}
+
+variable lowerPunchPeriod equal ${punchPeriod}
+variable lowerPunchAmplitude equal ${dieHeight}
+
+######################################### ADD DIE AND PUNCH WALLS ################################################
+
+variable wall_contact_string string "granular mdr 1e8 0.3 1e6 0.0 0.08 0.8 tangential linear_nohistory 0.0 0.0"
+
+region lowerPunch plane 0 0 0 0 0 1 side in units box
+#region upperPunch plane 0 0 ${dieHeight} 0 0 -1 side in move NULL NULL v_zPunchDisplacement units box
+region upperPunch plane 0 0 ${dieHeight} 0 0 -1 side in units box
+
+fix lowerPunch all wall/gran/region ${wall_contact_string} region lowerPunch contacts
+fix upperPunch all wall/gran/region ${wall_contact_string} region upperPunch contacts
+
+##################################### INSERT PARTICLES ####################################################
+
+fix 1 all nve/sphere
+fix grav all gravity 9.81 vector 0 0 -1
+
+variable zo1 equal 3*${atomDiameter}
+variable zo2 equal 1.5*${atomDiameter}
+
+create_atoms 1 single 0 0 ${zo1} units box
+group centerAtom id 1
+set atom 1 diameter ${atomDiameter} density ${atomDensity} 
+
+create_atoms 1 single 0 0 ${zo2} units box
+group xnegAtom id 2
+set atom 2 diameter ${atomDiameter} density ${atomDensity}  
+
+variable z1 equal z[1]
+variable zPunch equal ${dieHeight}-v_zPunchDisplacement
+variable del equal ${atomRadius}-(v_zPunch-v_z1)
+variable afz_punch atom f_upperPunch[4]
+#variable fz_punch equal f_afz_punch[1]
+#variable fz1 equal fz[1]
+
+#fix print1 all print 1 "${del},${fz_punch},${fz1}" file twoAtomDrop.csv screen no 
+
+######################################## SCREEN OUTPUT  ####################################################
+
+compute       1 all erotate/sphere
+thermo_style  custom dt step atoms ke vol
+thermo        1000
+thermo_modify lost ignore norm no
+
+##################################### SET UP DUMP OUTPUTS  ####################################################
+
+dump dumpParticles all vtk 500 post/particles_*.vtk id x y z fx fy fz 
+#dump 1 all custom 1 uniaxialCompression id type f_plane_yz_neg[*]
+
+#variable ax_yz_neg atom f_plane_yz_neg[5]
+#variable afx_yz_neg atom f_plane_yz_neg[2]
+#variable xpos equal v_ax_yz_neg[1]
+#variable delta equal ${d}/2+v_xpos
+#variable fx_neg equal v_afx_yz_neg[1]
+#fix log all print 1 "${delta} ${fx_neg}" file uniaxialCompression.csv title "del,fx_yz_neg" screen no
+
+######################################### BEGIN RUN  ##########################################################
+
+run ${ejectionEndStep} 
+

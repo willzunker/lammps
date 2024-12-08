@@ -1,0 +1,78 @@
+units		   si
+atom_style	   sphere
+atom_modify	   first big
+boundary       f f f 
+region         box block -40 40 -40 40 0 80
+create_box     2 box
+
+
+create_atoms 1 single 0 0 44
+group centerAtom id 1
+set atom 1 diameter 70 density 1000 
+
+region         mpcdBox block -5 5 -5 5 0 10
+variable N_small equal 4000
+create_atoms   2 random ${N_small} 13214 mpcdBox
+
+group		   big type 1
+group		   small type 2
+set		       group small mass 0.001 
+set            group small diameter 0.2
+
+neighbor       0.3 multi
+comm_modify	    mode multi group big vel yes
+
+pair_style	   granular 
+pair_coeff	   1 1 hooke 1e3 1e2 tangential linear_nohistory 1.0 0.4 
+pair_coeff	   2 2 hooke 1e3 1e2 tangential linear_nohistory 1.0 0.4 
+pair_coeff	   1 2 hooke 1e3 1e2 tangential linear_nohistory 1.0 0.4 
+
+neigh_modify   page 100000
+neigh_modify   one 10000
+delete_atoms   overlap 35.01 small big
+
+velocity	    small create 0.001 87287 loop geom
+
+neighbor	    0.3 multi
+neigh_modify	delay 1000 
+neigh_modify	include big
+
+timestep	    1e-4
+
+pair_style	   granular 
+pair_coeff	   1 1 hooke 1e4 1e2 tangential linear_nohistory 1.0 0.4 cutoff 3.5
+pair_coeff	   2 2 hooke 1e4 1e2 tangential linear_nohistory 1.0 0.4 cutoff 0.0
+pair_coeff	   1 2 hooke 1e4 1e2 tangential linear_nohistory 1.0 0.4 cutoff 0.0
+
+fix             1 big nve/sphere
+
+variable        compression_steps equal 10000
+variable        delta_wall equal 0.5*($(zhi)-$(zlo))
+variable        disp equal -elapsed/${compression_steps}*${delta_wall}
+variable        wall_hi equal 10+v_disp
+variable        wall_lo equal 0 
+variable 		disp0 equal 0.0
+variable 		vel0 equal 0.0
+variable 		velz equal -1/${compression_steps}*${delta_wall}/dt
+fix				6 big move variable v_disp0 v_disp0 v_disp v_vel0 v_vel0 v_velz 
+
+variable mpcd_temp equal 1e21
+fix	            2 small srd 20 big ${mpcd_temp} 1 3122 &
+		        cubic warn 0.0001 shift yes 49829 &
+		        overlap yes collision noslip tstat yes bounce 10 inside ignore
+fix		        3 all wall/srd xlo -5 xhi 5 ylo -5 yhi 5 zlo 0.0 zhi 10
+
+
+
+
+thermo		    10
+thermo_style	custom step atoms ke press
+thermo_modify   lost ignore
+dump            1 all custom 100 atom_fluid_compression.dump id type mass diameter x y z vx vy vz
+
+variable p equal press
+fix log all print 1 "${wall_hi} ${p} ${N_small} ${mpcd_temp}" file eqn_of_state.csv screen no
+
+
+run             ${compression_steps}
+

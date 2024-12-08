@@ -1,0 +1,151 @@
+# MDR contact model test
+
+atom_style granular 
+atom_modify map array 
+boundary f f f
+newton off
+communicate single vel yes
+units si
+ 
+region box block -100 100 -100 100 -100 100 units box
+create_box 2 box
+
+neighbor      6 bin
+neigh_modify  delay 0
+
+# peratomtypepair n_atomtypes values... (e.g. peratomtypepair 2 value_11 value_12 value_21 value_22)
+fix  m1 all property/global youngsModulus peratomtype 5.e8 5.e8
+fix  m2 all property/global poissonsRatio peratomtype 0.3 0.3
+fix  m3 all property/global yieldStress peratomtype 25.e6 25.e6
+fix  m4 all property/global gamma peratomtype 0.0 0.0
+fix  m5 all property/global coefficientRestitution peratomtypepair 2 1 1 1 1
+fix  m6 all property/global coefficientFriction peratomtypepair 2 0.0 0.0 0.0 0.0
+fix  m7 all property/global characteristicVelocity scalar 2.0
+fix  m8 all property/global cohesionEnergyDensity peratomtypepair 2 660500 660500 660500 660500
+
+pair_style gran model mdr adhesion off 
+
+pair_coeff  * *
+timestep 0.001
+fix integr all nve/sphere
+
+# DEFINE BOUNDARY
+fix wall_xneg all wall/gran model mdr primitive type 2 xplane -100 adhesion off
+fix wall_xpos all wall/gran model mdr primitive type 2 xplane 100 adhesion off
+fix wall_yneg all wall/gran model mdr primitive type 2 yplane -100 adhesion off
+fix wall_ypos all wall/gran model mdr primitive type 2 yplane 100 adhesion off
+fix wall_zneg all wall/gran model mdr primitive type 2 zplane -100 adhesion off
+fix wall_zpos all wall/gran model mdr primitive type 2 zplane 100 adhesion off
+
+fix plane_yz_pos all mesh/surface/stress file meshes/plane_yz_pos.stl type 2 stress on
+fix plane_yz_neg all mesh/surface/stress file meshes/plane_yz_neg.stl type 2 stress on
+fix granwalls all wall/gran model mdr mesh n_meshes 2 meshes plane_yz_pos plane_yz_neg adhesion off
+
+#INSERT 1 ATOMS 
+create_atoms 1 single 0 0 0 units box
+group centerAtom id 1
+variable d equal 20
+variable den equal 1000
+set atom 1 diameter ${d} density ${den} 
+
+#output settings, include total thermal energy
+compute       1 all erotate/sphere
+thermo_style  custom dt step atoms ke c_1 vol 
+thermo        1000
+thermo_modify lost ignore norm no
+
+# Sinusoidal movement 
+#variable mydt equal dt
+#variable mystep equal step
+#variable mytime equal ${mydt}*v_mystep
+#variable freq equal 1.0/(2000.0*${mydt})
+#variable dispMax equal ${d}*0.5*0.8
+#variable disp equal abs(${dispMax}*sin(${freq}*v_mytime))
+#variable disp5 equal v_disp*5
+#variable vel equal ${dispMax}*${freq}*cos(${freq}*v_mytime)
+#variable vel_neg equal -v_vel
+#variable zeroDisp equal 0.0
+#variable disp_neg equal -v_disp
+
+# Linear movement
+variable mydt equal dt
+variable mystep equal step
+variable mytime equal ${mydt}*v_mystep
+variable ddelta equal ${d}/2000
+variable slope equal ${ddelta}/${mydt}
+variable disp equal ${slope}*v_mytime
+variable disp_neg equal -v_disp
+variable vel equal ${ddelta}/${mydt}
+variable vel_neg equal -${vel}
+variable zeroDisp equal 0.0
+
+variable deltaI     equal 1.25
+variable deltaII    equal 3.0
+variable deltaIII   equal 4.75
+variable deltaIV    equal 6.25
+
+variable stepsIload equal ${deltaI}/${ddelta}
+variable stepsIunload equal ${stepsIload}+${deltaI}/${ddelta} 
+variable stepsIIload equal ${stepsIunload}+${deltaII}/${ddelta}
+variable stepsIIunload equal ${stepsIIload}+${deltaII}/${ddelta} 
+variable stepsIIIload equal ${stepsIIunload}+${deltaIII}/${ddelta}
+variable stepsIIIunload equal ${stepsIIIload}+${deltaIII}/${ddelta} 
+variable stepsIVload equal ${stepsIIIunload}+${deltaIV}/${ddelta}
+variable stepsIVunload equal ${stepsIVload}+${deltaIV}/${ddelta} 
+
+variable del equal f_plane_yz_pos[7]
+variable fx1 equal f_plane_yz_pos[1]
+
+fix cAtom centerAtom move variable v_zeroDisp NULL NULL NULL NULL NULL units box 
+
+#INSERT THE FIRST PARTICLES SO DUMP IS NOT EMPTY
+dump   dmp all custom/vtk 10 post/uniaxialCompressionMeshWalls_*.vtk x y z fx fy fz 
+fix log all print 1 "${del},${fx1}" file uniaxialCompressionMeshWalls.csv title "del,fx1" screen no
+dump 	dumpstl all mesh/stl 10 post/walls_*.stl
+
+fix move_plane_yz_pos_Iload all move/mesh mesh plane_yz_pos linear ${vel_neg} 0.0 0.0  
+fix move_plane_yz_neg_Iload all move/mesh mesh plane_yz_neg linear ${vel} 0.0 0.0 
+run ${stepsIload} upto
+
+unfix move_plane_yz_pos_Iload
+unfix move_plane_yz_neg_Iload
+fix move_plane_yz_pos_Iunload all move/mesh mesh plane_yz_pos linear ${vel} 0.0 0.0  
+fix move_plane_yz_neg_Iunload all move/mesh mesh plane_yz_neg linear ${vel_neg} 0.0 0.0 
+run ${stepsIunload} upto
+
+unfix move_plane_yz_pos_Iunload
+unfix move_plane_yz_neg_Iunload
+fix move_plane_yz_pos_IIload all move/mesh mesh plane_yz_pos linear ${vel_neg} 0.0 0.0  
+fix move_plane_yz_neg_IIload all move/mesh mesh plane_yz_neg linear ${vel} 0.0 0.0 
+run ${stepsIIload} upto
+
+unfix move_plane_yz_pos_IIload
+unfix move_plane_yz_neg_IIload
+fix move_plane_yz_pos_IIunload all move/mesh mesh plane_yz_pos linear ${vel} 0.0 0.0  
+fix move_plane_yz_neg_IIunload all move/mesh mesh plane_yz_neg linear ${vel_neg} 0.0 0.0 
+run ${stepsIIunload} upto
+
+unfix move_plane_yz_pos_IIunload
+unfix move_plane_yz_neg_IIunload
+fix move_plane_yz_pos_IIIload all move/mesh mesh plane_yz_pos linear ${vel_neg} 0.0 0.0  
+fix move_plane_yz_neg_IIIload all move/mesh mesh plane_yz_neg linear ${vel} 0.0 0.0 
+run ${stepsIIIload} upto
+
+unfix move_plane_yz_pos_IIIload
+unfix move_plane_yz_neg_IIIload
+fix move_plane_yz_pos_IIIunload all move/mesh mesh plane_yz_pos linear ${vel} 0.0 0.0  
+fix move_plane_yz_neg_IIIunload all move/mesh mesh plane_yz_neg linear ${vel_neg} 0.0 0.0 
+run ${stepsIIIunload} upto
+
+unfix move_plane_yz_pos_IIIunload
+unfix move_plane_yz_neg_IIIunload
+fix move_plane_yz_pos_IVload all move/mesh mesh plane_yz_pos linear ${vel_neg} 0.0 0.0  
+fix move_plane_yz_neg_IVload all move/mesh mesh plane_yz_neg linear ${vel} 0.0 0.0 
+run ${stepsIVload} upto
+
+unfix move_plane_yz_pos_IVload
+unfix move_plane_yz_neg_IVload
+fix move_plane_yz_pos_IVunload all move/mesh mesh plane_yz_pos linear ${vel} 0.0 0.0  
+fix move_plane_yz_neg_IVunload all move/mesh mesh plane_yz_neg linear ${vel_neg} 0.0 0.0 
+run ${stepsIVunload} upto
+

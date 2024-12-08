@@ -1,0 +1,12 @@
+function plot_residual_stresses(results_file,Y)
+
+for i = 1 : length(Y)
+    force_disp_file = strcat('/Users/willzunker/lammps/sims/residual_stress_study/',results_file,'/',results_file,'_',num2str(i),'_force_disp.csv');
+    force_disp = abs(readmatrix(force_disp_file));
+    [max_force,max_index] = max(force_disp(:,2));
+    threshold = 0.01*max_force;
+    indices = find(force_disp(max_index:end,2) < threshold);
+    residual_index = indices(1);
+end
+
+e

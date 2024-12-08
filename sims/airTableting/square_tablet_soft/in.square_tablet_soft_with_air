@@ -1,0 +1,237 @@
+############################### SIMULATION SETTINGS ###################################################
+
+units si
+atom_style sphere
+atom_modify map array
+atom_modify first powder
+boundary f f f 
+newton on
+
+############################################ ADD IN BIG PARTICLES #####################################
+
+read_data spheres.data
+read_data sphere_punch_tight.data add append
+
+variable radius_sphere_punch equal 0.4e-3
+
+############################### DEFINE MDR QUANTITIES ###################################################
+
+variable radius_powder equal 0.24e-3
+variable density_powder equal 1560
+variable YoungsModulus equal 1e6
+variable PoissonsRatio equal 0.3
+variable YieldStress equal 1e4
+variable SurfaceEnergy equal 85e-3
+variable SurfaceEnergyWall equal 0.0
+variable psi_b equal 0.35
+variable CoR equal 0.5
+variable kt equal 2/7*${YoungsModulus}*${radius_powder}
+variable kt_wall equal 2/7*${YoungsModulus}*${radius_powder}
+variable xgammat equal 0.0
+variable mu_s equal 0.9
+variable mu_s_wall equal 0.1
+variable mu_roll equal 0.7
+variable k_roll equal 2.25*${mu_roll}*${mu_roll}*${YoungsModulus}*${radius_powder}
+variable gamma_roll equal 0.0
+
+variable atom_contact_string string "mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEnergy} ${psi_b} ${CoR} damping none tangential linear_history ${kt} ${xgammat} ${mu_s} rolling sds ${k_roll} ${gamma_roll} ${mu_roll}" 
+variable wall_contact_string string "granular mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEnergyWall} ${psi_b} ${CoR} damping none tangential linear_history ${kt_wall} ${xgammat} ${mu_s_wall} rolling sds ${k_roll} ${gamma_roll} ${mu_roll}"
+variable zero_contact_string string "hooke 0.0 0.0 tangential linear_nohistory 0.0 0.0"
+
+############################### PROPERTIES THAT AFFECT FLUID BEHVAVIOR #################################
+
+timestep 1e-5
+variable num_mpcd equal 1.5e6
+variable mass_mpcd equal 4/3*PI*${radius_powder}^3*${density_powder}*3e-4
+variable mpcd_grid_size equal 2*${radius_powder}/5
+variable temp_mpcd equal 3.131281e12
+variable N_reset equal 5
+
+############################### ADD IN MPCD PARTICLES ###################################################
+
+variable die_xh equal  4e-3
+variable die_xl equal -4e-3
+variable die_yh equal  4e-3
+variable die_yl equal -4e-3
+variable die_zh equal  1e-2
+variable die_zl equal  0.0
+
+variable diameter_mcpd equal 2*${radius_sphere_punch}/50
+variable velocity_mpcd equal ${radius_powder}/(5*dt)
+
+variable die_zh2 equal 1.2*${die_zh}
+region         insert_mpcd block ${die_xl} ${die_xh} ${die_yl} ${die_yh} ${die_zl} ${die_zh2}
+create_atoms   3 random ${num_mpcd} 13214 insert_mpcd
+
+############################### REMOVE OVERLAPS BETWEEN BIG AND SMALL ####################################
+
+variable skin_dis equal 2*${radius_powder}*0.3
+variable skin_dis_real equal 1.5*${radius_powder}
+variable cutoff_dis equal 3.5*${radius_powder}
+variable overlap_delete_powder equal 2*${radius_powder}*0.6
+variable overlap_delete_sphere_punch equal 2*${radius_sphere_punch}*0.6
+
+atom_modify    first powder
+group		   powder type 1
+group		   small type 3
+group 		   sphere_punch type 2
+group 		   big type 1 2
+set		       group small mass ${mass_mpcd} 
+set            group small diameter ${diameter_mcpd}
+
+neighbor       ${skin_dis} multi
+comm_modify	   mode multi group powder vel yes
+
+pair_style	   granular 
+pair_coeff	   1 1 ${atom_contact_string} 
+pair_coeff	   2 2 ${atom_contact_string} 
+pair_coeff	   3 3 ${atom_contact_string}  
+pair_coeff	   1 2 ${atom_contact_string} 
+pair_coeff	   1 3 ${atom_contact_string} 
+pair_coeff	   2 3 ${atom_contact_string}  
+
+neigh_modify   one 10000
+neigh_modify   page 100000
+delete_atoms   overlap ${overlap_delete_powder} small powder
+delete_atoms   overlap ${overlap_delete_sphere_punch} small sphere_punch
+
+############################### SET INTERACTIONS BETWEEN ATOMS ####################################
+
+velocity	    small create ${velocity_mpcd} 87287 loop geom
+
+neighbor	    ${skin_dis_real} multi
+neigh_modify every 10 delay 1000 check yes 
+neigh_modify	include powder
+
+pair_style	   granular 
+pair_coeff	   1 1 ${atom_contact_string} cutoff ${cutoff_dis}
+pair_coeff	   2 2 ${atom_contact_string} cutoff 0.0
+pair_coeff	   3 3 ${atom_contact_string} cutoff 0.0 
+pair_coeff	   1 2 ${atom_contact_string} cutoff 0.0
+pair_coeff	   1 3 ${atom_contact_string} cutoff 0.0 
+pair_coeff	   2 3 ${atom_contact_string} cutoff 0.0 
+
+fix             1a powder nve/sphere
+
+############################### DEFINE MPCD PARTICLE PROPERTIES ###################################
+
+variable        mpcd_wall_xl equal ${die_xl} 
+variable        mpcd_wall_xh equal ${die_xh} 
+variable        mpcd_wall_yl equal ${die_yl} 
+variable        mpcd_wall_yh equal ${die_yh} 
+variable        mpcd_wall_zl equal ${die_zl} 
+variable        mpcd_wall_zh equal 1.2*${die_zh} 
+fix	            2a small srd ${N_reset} big ${temp_mpcd} ${mpcd_grid_size} 3122 &
+		        cubic warn 0.0001 shift yes 49829 &
+		        overlap yes collision noslip tstat yes bounce 10 inside ignore radius 0.95		
+fix		        3 all wall/srd xlo v_mpcd_wall_xl xhi v_mpcd_wall_xh ylo v_mpcd_wall_yl yhi v_mpcd_wall_yh zlo v_mpcd_wall_zl zhi v_mpcd_wall_zh
+
+############################### DEFINE REGIONS AND THEIR INTERACTIONS #############################
+
+variable        disp_upper equal 0
+variable 		disp_lower equal 0
+variable        disp_die1 equal 0
+variable 		disp_die2 equal 0
+variable        disp_die3 equal 0
+variable 		disp_die4 equal 0
+region          die1 block INF ${die_xl} ${die_yl} ${die_yh} ${die_zl} ${die_zh} side out move NULL NULL v_disp_die1
+region          die2 block ${die_xh} INF ${die_yl} ${die_yh} ${die_zl} ${die_zh} side out move NULL NULL v_disp_die2
+region          die3 block ${die_xl} ${die_xh} INF ${die_yl} ${die_zl} ${die_zh} side out move NULL NULL v_disp_die3
+region          die4 block ${die_xl} ${die_xh} ${die_yh} INF ${die_zl} ${die_zh} side out move NULL NULL v_disp_die4
+region          upper_punch block ${die_xl} ${die_xh} ${die_yl} ${die_yh} ${die_zh} INF side out move NULL NULL v_disp_upper
+region          lower_punch block ${die_xl} ${die_xh} ${die_yl} ${die_yh} INF ${die_zl} side out move NULL NULL v_disp_lower
+fix             4a1 powder wall/gran/region ${wall_contact_string} region die1
+fix 			4a2 powder wall/gran/region ${wall_contact_string} region die2
+fix 			4a3 powder wall/gran/region ${wall_contact_string} region die3
+fix 			4a4 powder wall/gran/region ${wall_contact_string} region die4
+fix             4b powder wall/gran/region ${wall_contact_string} region upper_punch contacts 
+fix             4c powder wall/gran/region ${wall_contact_string} region lower_punch contacts
+
+variable g_mpcd equal 9.81
+fix             5 powder gravity ${g_mpcd} vector 0 0 -1
+
+###################################### SET UP SPHERE PUNCH MOVEMENT #####################################
+
+variable 		disp0 equal 0.0
+variable 		vel0 equal 0.0
+variable 		velz equal 0.0
+fix				6 sphere_punch move variable v_disp0 v_disp0 v_disp_upper v_vel0 v_vel0 v_velz
+
+##################################### SET UP DUMP OUTPUTS  ####################################################
+
+variable output_rate equal round(0.25e-3/dt)
+
+thermo		    10
+thermo_style	custom step atoms ke 
+thermo_modify   lost ignore
+
+compute avgPunchForce all reduce sum f_4b[4]
+variable avgPunchForce equal c_avgPunchForce
+
+run 0
+
+compute sigmaxx all property/atom d_sigmaxx
+compute sigmayy all property/atom d_sigmayy
+compute sigmazz all property/atom d_sigmazz
+compute Velas all property/atom d_Velas
+compute adhesive_length all property/atom d_adhesive_length
+
+compute sigmaxx_ave powder reduce ave c_sigmaxx 
+compute sigmayy_ave powder reduce ave c_sigmayy 
+compute sigmazz_ave powder reduce ave c_sigmazz 
+compute Velas_sum powder reduce sum c_Velas
+compute adhesive_length_ave powder reduce ave c_adhesive_length 
+
+variable sxx_ave equal c_sigmaxx_ave
+variable syy_ave equal c_sigmayy_ave
+variable szz_ave equal c_sigmazz_ave
+variable Vparticles equal c_Velas_sum
+variable adh_length_ave equal c_adhesive_length_ave
+
+fix log all print 1 "${sxx_ave} ${syy_ave} ${szz_ave} ${Vparticles} ${adh_length_ave}" file avg_stresses_with_air_tight_quick_release.csv screen no
+fix print1 all print 1 "${disp_upper} ${avgPunchForce}" file force_disp_with_air_tight_quick_release.csv screen no 
+dump            1 all custom ${output_rate} square_tablet_with_air_tight_quick_release.dump id type mass diameter x y z vx vy vz c_sigmaxx c_sigmayy c_sigmazz
+
+######################################### RUN SIMULATION ##########################################
+
+variable        upper_punch_stroke equal 0.68*(${die_zh}-${die_zl})
+variable        vel_upper equal 1.0
+
+variable        settling_steps equal round(0.02/dt)
+variable 		compression_steps equal 2*round(${upper_punch_stroke}/${vel_upper}/dt)
+#variable        ejection_steps equal ${compression_steps}
+#variable        free_float_steps equal round(0.01/dt)
+#variable        total_steps equal ${settling_steps}+${compression_steps}+${ejection_steps}+${free_float_steps}
+
+print "Compression steps = ${compression_steps}" 
+
+##### SETTLING #####
+
+#run		        ${settling_steps}
+
+##### Compression & Release #####
+
+variable 		velz equal -1/${compression_steps}*${upper_punch_stroke}/dt
+variable        punch_frequency equal PI/2/(dt*${compression_steps}/2)
+variable        disp_upper equal -${upper_punch_stroke}*sin(${punch_frequency}*elapsed*dt)
+variable 		velz equal -${upper_punch_stroke}*${punch_frequency}*cos(${punch_frequency}*elapsed*dt)
+variable 		short_compression equal round(${compression_steps}/2)
+run             ${short_compression}
+
+##### Release #####
+
+variable 		side_wall_amplitude equal 0.001
+variable 		vel_release equal 0.5
+variable 		release_steps equal round(${side_wall_amplitude}/${vel_release}/dt)
+variable        punch_frequency equal PI/2/(dt*${release_steps})
+variable 		disp_upper equal -${upper_punch_stroke}+4*${side_wall_amplitude}*sin(${punch_frequency}*elapsed*dt)
+variable 		velz equal ${side_wall_amplitude}*${punch_frequency}*cos(${punch_frequency}*elapsed*dt)
+variable        disp_side_walls equal ${side_wall_amplitude}*sin(${punch_frequency}*elapsed*dt)
+variable 		mpcd_wall_xl equal ${die_xl}-v_disp_side_walls
+variable 		mpcd_wall_xh equal ${die_xh}+v_disp_side_walls
+variable 		mpcd_wall_yl equal ${die_yl}-v_disp_side_walls
+variable 		mpcd_wall_yh equal ${die_yh}+v_disp_side_walls
+
+dump            dump2 all custom 1 square_tablet_with_air_tight_quick_release2.dump id type mass diameter x y z vx vy vz c_sigmaxx c_sigmayy c_sigmazz
+
+run 			${release_steps}	

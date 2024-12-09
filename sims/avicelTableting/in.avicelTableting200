@@ -1,12 +1,12 @@
 ############################### SIMULATION SETTINGS ###################################################
 
 atom_style sphere 1
-atom_modify map array 
+atom_modify map array
 comm_modify vel yes
 units si
 newton off
 neighbor      1.0e-3 bin
-neigh_modify every 10 delay 2000 check no 
+neigh_modify every 10 delay 2000 check no
 timestep 1.35e-7
 #processors 2 2 1
 
@@ -19,7 +19,7 @@ read_data spheres200.data
 
 variable atomRadius              equal 0.44e-3*1.25
 variable atomDiameter            equal 2*${atomRadius}
-variable atomDensity             equal 1560 
+variable atomDensity             equal 1560
 variable atomMassAvg             equal ${atomDensity}*4.0/3.0*PI*${atomRadius}^3.0
 variable dieRadius               equal 4e-3
 variable dieHeight               equal 1e-2
@@ -28,7 +28,7 @@ variable dieHeight               equal 1e-2
 
 pair_style granular
 # mdr = E, nu, Y, gamma, psi_b, CoR
-# linear_history = k_t, x_gamma,t, mu_s 
+# linear_history = k_t, x_gamma,t, mu_s
 variable YoungsModulus equal 5e9
 variable YieldStress equal 1.9e8
 variable PoissonsRatio equal 0.4
@@ -44,7 +44,7 @@ variable mu_s equal 0.7
 variable mu_s_wall equal 0.1
 variable mu_roll equal 0.6
 variable k_roll equal 2.25*${mu_roll}*${mu_roll}*${YoungsModulus}*${atomRadius}
-variable gamma_roll equal 0.0 #${beta}*sqrt(${atomMassAvg}*${YoungsModulus}*${atomRadius}) 
+variable gamma_roll equal 0.0 #${beta}*sqrt(${atomMassAvg}*${YoungsModulus}*${atomRadius})
 
 pair_coeff * * mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEnergy} ${psi_b} ${CoR} damping none tangential linear_history ${kt} ${xgammat} ${mu_s} rolling sds ${k_roll} ${gamma_roll} ${mu_roll}
 #pair_coeff * * mdr ${YoungsModulus} ${PoissonsRatio} ${YieldStress} ${SurfaceEnergy} ${psi_b} ${CoR} tangential linear_history ${kt} ${xgammat} ${mu_s} damping none
@@ -73,7 +73,7 @@ region xPlaneNeg plane ${dieRadiusPlusNeg} 0 0 1 0 0 side in units box move v_di
 
 fix lowerPunch all wall/gran/region ${wall_contact_string} region lowerPunch contacts
 fix upperPunch all wall/gran/region ${wall_contact_string} region upperPunch contacts
-fix die all wall/gran/region ${wall_contact_string} region die contacts 
+fix die all wall/gran/region ${wall_contact_string} region die contacts
 fix xPlanePos all wall/gran/region ${wall_contact_string} region xPlanePos contacts
 fix xPlaneNeg all wall/gran/region ${wall_contact_string} region xPlaneNeg contacts
 
@@ -84,7 +84,8 @@ variable avgLowerPunchForce equal c_avgLowerPunchForce
 compute fractureForce all reduce sum f_xPlanePos[2]
 variable fractureForce equal c_fractureForce
 
-fix print1 all print 1 "${disp_upper} ${avgPunchForce} ${avgLowerPunchForce} ${fractureForce}" file upperPunchDispForce.csv screen no 
+fix print1 all print 1 "${disp_upper} ${avgPunchForce} ${avgLowerPunchForce} ${fractureForce}" file upperPunchDispForce.csv screen no
+fix printSTL all print 1 "${disp_upper} ${disp_lower}" file punch_disp_STL_generation.csv screen no
 
 ##################################### INSERT PARTICLES ####################################################
 
@@ -125,11 +126,11 @@ compute sigmazz all property/atom d_sigmazz
 compute Velas all property/atom d_Velas
 compute adhesive_length all property/atom d_adhesive_length
 
-compute sigmaxx_ave all reduce ave c_sigmaxx 
-compute sigmayy_ave all reduce ave c_sigmayy 
-compute sigmazz_ave all reduce ave c_sigmazz 
+compute sigmaxx_ave all reduce ave c_sigmaxx
+compute sigmayy_ave all reduce ave c_sigmayy
+compute sigmazz_ave all reduce ave c_sigmazz
 compute Velas_sum all reduce sum c_Velas
-compute adhesive_length_ave all reduce ave c_adhesive_length 
+compute adhesive_length_ave all reduce ave c_adhesive_length
 
 variable sxx_ave equal c_sigmaxx_ave
 variable syy_ave equal c_sigmayy_ave
@@ -179,5 +180,5 @@ variable 		disp_upper equal ${dieHeight}*0.9
 variable        max_disp equal ${dieRadius}*0.75
 #variable        disp_xPlanePos equal -${max_disp}*elapsed/${free_float_steps}
 #variable        disp_xPlaneNeg equal -v_disp_xPlanePos
-run 			${free_float_steps}	
+run 			${free_float_steps}
 

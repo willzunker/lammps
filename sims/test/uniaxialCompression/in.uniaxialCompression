@@ -122,8 +122,9 @@ thermo_modify lost ignore norm no
 
 ##################################### SET UP DUMP OUTPUTS  ####################################################
 
-dump dumpParticles all vtk 1 post/particles_*.vtk x y z fx fy fz 
+# dump dumpParticles all vtk 1 post/particles_*.vtk x y z fx fy fz
 #dump 1 all custom 1 uniaxialCompression id type f_plane_yz_neg[*]
+dump dumpParticles all custom 1 uniaxialCompression.dump id type mass x y z vx vy vz fx fy fz radius
 
 variable ax_yz_neg atom f_plane_yz_neg[5]
 variable afx_yz_neg atom f_plane_yz_neg[2]

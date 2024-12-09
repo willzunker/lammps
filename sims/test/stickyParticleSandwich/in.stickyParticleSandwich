@@ -61,7 +61,8 @@ fix cAtom centerAtom move variable v_zeroDisp NULL NULL NULL NULL NULL units box
 
 ##################################### SET UP DUMP OUTPUTS  ####################################################
 
-dump dumpParticles all vtk 1 post/particles_*.vtk x y z fx fy fz 
+# dump dumpParticles all vtk 1 post/particles_*.vtk x y z fx fy fz
+dump dumpParticles all custom 1 stickyParticleSandwich.dump id type mass x y z vx vy vz fx fy fz radius
 variable x3 equal x[3]
 variable x1 equal x[1]
 variable del equal ${d}-(x[3]-x[1])

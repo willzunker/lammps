@@ -74,7 +74,9 @@ fix cAtom botAtom move variable v_zeroDisp NULL NULL NULL NULL NULL units box
 
 ##################################### SET UP DUMP OUTPUTS  ####################################################
 
-dump dumpParticles all vtk 20 post/particleFlipped_5_*.vtk x y z fx fy fz radius
+# dump dumpParticles all vtk 20 post/particleFlipped_5_*.vtk x y z fx fy fz radius
+dump dumpParticles all custom 1 twoParticleFlipped_0.dump id type mass x y z vx vy vz fx fy fz radius
+
 variable x2 equal x[2]
 variable del equal (${dtop}+${dbot})/2-x[2]
 variable fx2 equal fx[2]

@@ -1,7 +1,11 @@
 #!/bin/bash
+set -euo pipefail
 
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.particleSandwich
-mpirun --np 2 /Users/willzunker/lammps_mdr_develop/build/lmp -in in.particleSandwichParallel
+# path to lmp executable
+LMP=../../../build/lmp
 
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.particleSandwichCorner
-mpirun --np 2 /Users/willzunker/lammps_mdr_develop/build/lmp -in in.particleSandwichCornerParallel
+"${LMP}" < in.particleSandwich
+mpirun --np 2 "${LMP}" -in in.particleSandwichParallel
+
+"${LMP}" < in.particleSandwichCorner
+mpirun --np 2 "${LMP}" -in in.particleSandwichCornerParallel

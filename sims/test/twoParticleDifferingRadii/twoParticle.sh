@@ -1,13 +1,17 @@
 #!/bin/bash
+set -euo pipefail
 
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.twoParticle_1
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.twoParticle_0_75
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.twoParticle_0_5
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.twoParticle_0_25
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.twoParticle_0
+# path to lmp executable
+LMP=../../../build/lmp
 
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.twoParticleFlipped_1
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.twoParticleFlipped_0_75
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.twoParticleFlipped_0_5
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.twoParticleFlipped_0_25
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.twoParticleFlipped_0
+"${LMP}" < in.twoParticle_1
+"${LMP}" < in.twoParticle_0_75
+"${LMP}" < in.twoParticle_0_5
+"${LMP}" < in.twoParticle_0_25
+"${LMP}" < in.twoParticle_0
+
+"${LMP}" < in.twoParticleFlipped_1
+"${LMP}" < in.twoParticleFlipped_0_75
+"${LMP}" < in.twoParticleFlipped_0_5
+"${LMP}" < in.twoParticleFlipped_0_25
+"${LMP}" < in.twoParticleFlipped_0

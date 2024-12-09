@@ -1,9 +1,15 @@
 #!/bin/bash
+set -euo pipefail
+
+# path to lmp executable
+LMP=../../../build/lmp
 
 # non-adhesive simulations
-rm pairContactsTopCen.csv
-rm pairContactsBotCen.csv
-cd post
-rm *.vtk
-cd ..
-/Users/willzunker/lammps/build/lmp < in.compressionSleeveFree
+rm -f pairContactsTopCen.csv
+rm -f pairContactsBotCen.csv
+if [[ -d "post" ]]; then
+    cd post
+    rm -f *.vtk
+    cd ..
+fi
+${LMP} < in.compressionSleeveFree

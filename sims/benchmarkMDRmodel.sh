@@ -1,19 +1,23 @@
 #!/bin/bash
+set -euo pipefail
+
+# path to lmp executable
+LMP=../../../build/lmp
 
 # non-adhesive simulations
 cd uniaxialCompression
-/Users/willzunker/lammps/build/lmp < in.uniaxialCompression
+${LMP} < in.uniaxialCompression
 
 cd ../dieCompaction
-/Users/willzunker/lammps/build/lmp < in.dieCompaction
+${LMP} < in.dieCompaction
 
 cd ../triaxialCompaction
-/Users/willzunker/lammps/build/lmp < in.triaxialCompaction
+${LMP} < in.triaxialCompaction
 
 # adhesive simulations
 cd ../stickyParticleSandwich
- /Users/willzunker/lammps/build/lmp < in.stickyParticleSandwich
+${LMP} < in.stickyParticleSandwich
 
- cd ../stickyUniaxialCompression
- /Users/willzunker/lammps/build/lmp < in.stickyUniaxialCompression
- /Users/willzunker/lammps/build/lmp < in.plasticStickyUniaxialCompression
+cd ../stickyUniaxialCompression
+${LMP} < in.stickyUniaxialCompression
+${LMP} < in.plasticStickyUniaxialCompression

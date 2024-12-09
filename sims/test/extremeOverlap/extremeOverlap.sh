@@ -1,15 +1,19 @@
 #!/bin/bash
+set -euo pipefail
 
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.extremeOverlap_0
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.extremeOverlap_1
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.extremeOverlap_2
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.extremeOverlap_3
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.extremeOverlap_4
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.extremeOverlap_5
+# path to lmp executable
+LMP=../../../build/lmp
 
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.extremeOverlapFlipped_0
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.extremeOverlapFlipped_1
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.extremeOverlapFlipped_2
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.extremeOverlapFlipped_3
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.extremeOverlapFlipped_4
-/Users/willzunker/lammps_mdr_develop/build/lmp < in.extremeOverlapFlipped_5
+"${LMP}" < in.extremeOverlap_0
+"${LMP}" < in.extremeOverlap_1
+"${LMP}" < in.extremeOverlap_2
+"${LMP}" < in.extremeOverlap_3
+"${LMP}" < in.extremeOverlap_4
+"${LMP}" < in.extremeOverlap_5
+
+"${LMP}" < in.extremeOverlapFlipped_0
+"${LMP}" < in.extremeOverlapFlipped_1
+"${LMP}" < in.extremeOverlapFlipped_2
+"${LMP}" < in.extremeOverlapFlipped_3
+"${LMP}" < in.extremeOverlapFlipped_4
+"${LMP}" < in.extremeOverlapFlipped_5

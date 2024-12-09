@@ -1,6 +1,9 @@
 #!/bin/bash
+set -euo pipefail
 
-# non-adhesive simulations
-rm avgStresses.csv
-/Users/willzunker/lammps/build/lmp < in.avicelTableting
-#mpirun --np 9 /Users/willzunker/lammps/build/lmp -in in.avicelTableting
+# path to lmp executable
+LMP=../../build/lmp
+
+# serial vs parallel
+${LMP} < in.avicelTableting
+#mpirun --np 4 ${LMP} -in in.avicelTableting

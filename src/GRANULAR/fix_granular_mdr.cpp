@@ -57,6 +57,7 @@ FixGranularMDR::FixGranularMDR(LAMMPS *lmp, int narg, char **arg) : Fix(lmp, nar
   create_attribute = 1;
 
   id_fix = nullptr;
+  fullist = nullptr;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -74,6 +75,13 @@ int FixGranularMDR::setmask()
   int mask = 0;
   mask |= PRE_FORCE;
   return mask;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixGranularMDR::init_list(int /*id*/, NeighList *ptr)
+{
+  fullist = ptr;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -115,7 +123,7 @@ void FixGranularMDR::setup_pre_force(int /*vflag*/)
   pair = dynamic_cast<PairGranular *>(force->pair_match("granular", 1));
   if (!pair) error->all(FLERR, Error::NOLASTLINE, "Must use pair granular with MDR model");
 
-  if (force->newton) error->all(FLERR, Error::NOLASTLINE, "MDR contact model requires Newton off");
+  //if (force->newton) error->all(FLERR, Error::NOLASTLINE, "MDR contact model requires Newton off");
 
   // Confirm all MDR models are consistent
 
@@ -406,8 +414,8 @@ void FixGranularMDR::calculate_contact_penalty()
       const double radsum_ij = radi + radj;
       const double deltan_ij = radsum_ij - r_ij;
       if (deltan_ij < 0.0) continue;
-      for (int kk = jj + 1; kk < jnum; kk++) {
-        k = jlist[kk];
+      for (int kk = 0; kk  < fullist->numneigh[i]; kk ++) {
+        k = fullist->firstneigh[i][kk];
         k &= NEIGHMASK;
 
         const double delx_ik = x[k][0] - xtmp;

@@ -21,6 +21,9 @@ FixStyle(GRANULAR/MDR,FixGranularMDR);
 #define LMP_FIX_GRANULAR_MDR_H
 
 #include "fix.h"
+#include "neighbor.h"
+#include "neigh_list.h"
+#include "neigh_request.h"
 
 namespace LAMMPS_NS {
 namespace Granular_MDR_NS {
@@ -68,6 +71,7 @@ class FixGranularMDR : public Fix {
   int pack_forward_comm(int, int *, double *, int, int *) override;
   void unpack_forward_comm(int, int, double *) override;
   void set_arrays(int) override;
+  void init_list(int, class NeighList *) override;
 
  private:
   int comm_stage;
@@ -76,6 +80,7 @@ class FixGranularMDR : public Fix {
   class PairGranular *pair;
   class FixNeighHistory *fix_history;
   std::vector<Fix *> fix_wall_list;
+  class NeighList *fullist;
 
   void mean_surf_disp();
   void calculate_contact_penalty();
@@ -94,9 +99,9 @@ class FixGranularMDR : public Fix {
   int index_Atot_sum;           // running sum of contact area minus cap area
   int index_ddelta_bar;         // change in mean surface displacement
   int index_psi;                // ratio of free surface area to total surface area
-  int index_sigmaxx;            // xx-component of the stress tensor, not necessary forforce calculation
-  int index_sigmayy;            // yy-component of the stress tensor, not necessary forforce calculation
-  int index_sigmazz;            // zz-component of the stress tensor, not necessary forforce calculation
+  int index_sigmaxx;            // xx-component of the stress tensor, not necessary for force calculation
+  int index_sigmayy;            // yy-component of the stress tensor, not necessary for force calculation
+  int index_sigmazz;            // zz-component of the stress tensor, not necessary for force calculation
   int index_history_setup_flag; // flag to check if history variables have beeninitialized
   int index_dRavg;              // average radius update increment
 };

@@ -64,6 +64,7 @@ class FixGranularMDR : public Fix {
  public:
   FixGranularMDR(class LAMMPS *, int, char **);
   ~FixGranularMDR() override;
+  void init() override;
   int setmask() override;
   void post_constructor() override;
   void setup_pre_force(int) override;

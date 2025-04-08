@@ -21,9 +21,6 @@
 #include "math_const.h"
 #include "modify.h"
 #include "update.h"
-#include "neighbor.h"
-#include "neigh_list.h"
-#include "neigh_request.h"
 
 #include <cmath>
 #include <iomanip>
@@ -515,8 +512,6 @@ void GranSubModNormalMDR::init()
     }
     fix_mdr_flag = 1;
   }
-
-  neighbor->add_request(modify->get_fix_by_style("GRANULAR/MDR")[0], NeighConst::REQ_FULL);
 
   // initialize particle history variables
   int tmp1, tmp2;

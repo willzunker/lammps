@@ -37,6 +37,10 @@
 #include "region.h"
 #include "update.h"
 #include "variable.h"
+#include "neigh_list.h"
+#include "neigh_request.h"
+#include "neighbor.h"
+#include <iostream>
 
 using namespace LAMMPS_NS;
 using namespace Granular_NS;
@@ -66,6 +70,13 @@ FixGranularMDR::~FixGranularMDR()
 {
   if (id_fix && modify->nfix) modify->delete_fix(id_fix);
   delete[] id_fix;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixGranularMDR::init()
+{
+  neighbor->add_request(this, NeighConst::REQ_FULL);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -414,9 +425,11 @@ void FixGranularMDR::calculate_contact_penalty()
       const double radsum_ij = radi + radj;
       const double deltan_ij = radsum_ij - r_ij;
       if (deltan_ij < 0.0) continue;
-      for (int kk = 0; kk  < fullist->numneigh[i]; kk ++) {
+      for (int kk = 0; kk < fullist->numneigh[i]; kk ++) {
         k = fullist->firstneigh[i][kk];
         k &= NEIGHMASK;
+
+        if ( k == j ) continue;
 
         const double delx_ik = x[k][0] - xtmp;
         const double dely_ik = x[k][1] - ytmp;
@@ -491,8 +504,8 @@ void FixGranularMDR::calculate_contact_penalty()
             // need to search both to find owner
             double *pjk = nullptr;
             if (j < atom->nlocal) {
-              int *const jklist = firstneigh[j];
-              const int jknum = numneigh[j];
+              int *const jklist = fullist->firstneigh[j];
+              const int jknum = fullist->numneigh[j];
               for (int jk = 0; jk < jknum; jk++) {
                 const int kneigh = jklist[jk] & NEIGHMASK;
                 if (k == kneigh) {
@@ -506,8 +519,8 @@ void FixGranularMDR::calculate_contact_penalty()
 
             // check if j is in the neighbor list of k
             if (pjk == nullptr && k < atom->nlocal) {
-              int *const kjlist = firstneigh[k];
-              const int kjnum = numneigh[k];
+              int *const kjlist = fullist->firstneigh[k];
+              const int kjnum = fullist->numneigh[k];
               for (int kj = 0; kj < kjnum; kj++) {
                 const int jneigh = kjlist[kj] & NEIGHMASK;
                 if (j == jneigh) {

@@ -61,11 +61,7 @@ FixGranularMDR::FixGranularMDR(LAMMPS *lmp, int narg, char **arg) : Fix(lmp, nar
   create_attribute = 1;
 
   id_fix = nullptr;
-<<<<<<< Updated upstream
-  fullist = nullptr;
-=======
   penalty_list = nullptr;
->>>>>>> Stashed changes
 }
 
 /* ---------------------------------------------------------------------- */
@@ -429,11 +425,9 @@ void FixGranularMDR::calculate_contact_penalty()
       const double radsum_ij = radi + radj;
       const double deltan_ij = radsum_ij - r_ij;
       if (deltan_ij < 0.0) continue;
-      for (int kk = 0; kk < penalty_list->numneigh[i]; kk ++) {
-        k = penalty_list->firstneigh[i][kk];
+      for (int kk = jj + 1; kk < jnum; kk++) {
+        k = jlist[kk];
         k &= NEIGHMASK;
-
-        if ( k == j ) continue;
 
         const double delx_ik = x[k][0] - xtmp;
         const double dely_ik = x[k][1] - ytmp;
@@ -508,8 +502,8 @@ void FixGranularMDR::calculate_contact_penalty()
             // need to search both to find owner
             double *pjk = nullptr;
             if (j < atom->nlocal) {
-              int *const jklist = penalty_list->firstneigh[j];
-              const int jknum = penalty_list->numneigh[j];
+              int *const jklist = firstneigh[j];
+              const int jknum = numneigh[j];
               for (int jk = 0; jk < jknum; jk++) {
                 const int kneigh = jklist[jk] & NEIGHMASK;
                 if (k == kneigh) {
@@ -523,8 +517,8 @@ void FixGranularMDR::calculate_contact_penalty()
 
             // check if j is in the neighbor list of k
             if (pjk == nullptr && k < atom->nlocal) {
-              int *const kjlist = penalty_list->firstneigh[k];
-              const int kjnum = penalty_list->numneigh[k];
+              int *const kjlist = firstneigh[k];
+              const int kjnum = numneigh[k];
               for (int kj = 0; kj < kjnum; kj++) {
                 const int jneigh = kjlist[kj] & NEIGHMASK;
                 if (j == jneigh) {

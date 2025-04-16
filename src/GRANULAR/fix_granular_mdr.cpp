@@ -61,7 +61,11 @@ FixGranularMDR::FixGranularMDR(LAMMPS *lmp, int narg, char **arg) : Fix(lmp, nar
   create_attribute = 1;
 
   id_fix = nullptr;
+<<<<<<< Updated upstream
   fullist = nullptr;
+=======
+  penalty_list = nullptr;
+>>>>>>> Stashed changes
 }
 
 /* ---------------------------------------------------------------------- */
@@ -92,7 +96,7 @@ int FixGranularMDR::setmask()
 
 void FixGranularMDR::init_list(int /*id*/, NeighList *ptr)
 {
-  fullist = ptr;
+  penalty_list = ptr;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -425,8 +429,8 @@ void FixGranularMDR::calculate_contact_penalty()
       const double radsum_ij = radi + radj;
       const double deltan_ij = radsum_ij - r_ij;
       if (deltan_ij < 0.0) continue;
-      for (int kk = 0; kk < fullist->numneigh[i]; kk ++) {
-        k = fullist->firstneigh[i][kk];
+      for (int kk = 0; kk < penalty_list->numneigh[i]; kk ++) {
+        k = penalty_list->firstneigh[i][kk];
         k &= NEIGHMASK;
 
         if ( k == j ) continue;
@@ -504,8 +508,8 @@ void FixGranularMDR::calculate_contact_penalty()
             // need to search both to find owner
             double *pjk = nullptr;
             if (j < atom->nlocal) {
-              int *const jklist = fullist->firstneigh[j];
-              const int jknum = fullist->numneigh[j];
+              int *const jklist = penalty_list->firstneigh[j];
+              const int jknum = penalty_list->numneigh[j];
               for (int jk = 0; jk < jknum; jk++) {
                 const int kneigh = jklist[jk] & NEIGHMASK;
                 if (k == kneigh) {
@@ -519,8 +523,8 @@ void FixGranularMDR::calculate_contact_penalty()
 
             // check if j is in the neighbor list of k
             if (pjk == nullptr && k < atom->nlocal) {
-              int *const kjlist = fullist->firstneigh[k];
-              const int kjnum = fullist->numneigh[k];
+              int *const kjlist = penalty_list->firstneigh[k];
+              const int kjnum = penalty_list->numneigh[k];
               for (int kj = 0; kj < kjnum; kj++) {
                 const int jneigh = kjlist[kj] & NEIGHMASK;
                 if (j == jneigh) {

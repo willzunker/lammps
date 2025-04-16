@@ -81,7 +81,7 @@ class FixGranularMDR : public Fix {
   class PairGranular *pair;
   class FixNeighHistory *fix_history;
   std::vector<Fix *> fix_wall_list;
-  class NeighList *fullist;
+  class NeighList *penalty_list;
 
   void mean_surf_disp();
   void calculate_contact_penalty();

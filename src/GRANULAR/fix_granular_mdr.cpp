@@ -76,7 +76,7 @@ FixGranularMDR::~FixGranularMDR()
 
 void FixGranularMDR::init()
 {
-  neighbor->add_request(this, NeighConst::REQ_FULL);
+  neighbor->add_request(this, NeighConst::REQ_NEWTON_OFF);
 }
 
 /* ---------------------------------------------------------------------- */

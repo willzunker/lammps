@@ -76,7 +76,7 @@ FixGranularMDR::~FixGranularMDR()
 
 void FixGranularMDR::init()
 {
-  neighbor->add_request(this, NeighConst::REQ_NEWTON_OFF);
+  neighbor->add_request(this, NeighConst::REQ_NEWTON_OFF | NeighConst::REQ_HISTORY | NeighConst::REQ_OCCASIONAL);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -200,9 +200,9 @@ void FixGranularMDR::setup_pre_force(int /*vflag*/)
                  norm_model->get_damp(), norm_model2->get_damp());
   }
 
-  fix_history = dynamic_cast<FixNeighHistory *>(modify->get_fix_by_id("NEIGH_HISTORY_GRANULAR"));
-  if (!fix_history)
-    error->all(FLERR, Error::NOLASTLINE, "Cannot find fix storing granular history");
+  //fix_history = dynamic_cast<FixNeighHistory *>(modify->get_fix_by_id("NEIGH_HISTORY_GRANULAR"));
+  //if (!fix_history)
+  //  error->all(FLERR, Error::NOLASTLINE, "Cannot find fix storing granular history");
   pre_force(0);
 }
 
@@ -374,7 +374,6 @@ void FixGranularMDR::set_arrays(int i)
 
 void FixGranularMDR::calculate_contact_penalty()
 {
-  NeighList *list = pair->list;
   const int size_history = pair->get_size_history();
 
   int i, j, k, ii, jj, inum, jnum;
@@ -386,11 +385,11 @@ void FixGranularMDR::calculate_contact_penalty()
   double **x = atom->x;
   double *radius = atom->radius;
 
-  inum = list->inum;
-  ilist = list->ilist;
-  numneigh = list->numneigh;
-  firstneigh = list->firstneigh;
-  firsthistory = fix_history->firstvalue;
+  inum = penalty_list->inum;
+  ilist = penalty_list->ilist;
+  numneigh = penalty_list->numneigh;
+  firstneigh = penalty_list->firstneigh;
+  firsthistory = penalty_list->history;
 
   // zero existing penalties
 
@@ -571,10 +570,10 @@ void FixGranularMDR::mean_surf_disp()
   double *Acon0 = atom->dvector[index_Acon0];
   double *ddelta_bar = atom->dvector[index_ddelta_bar];
 
-  inum = list->inum;
-  ilist = list->ilist;
-  numneigh = list->numneigh;
-  firstneigh = list->firstneigh;
+  inum = penalty_list->inum;
+  ilist = penalty_list->ilist;
+  numneigh = penalty_list->numneigh;
+  firstneigh = penalty_list->firstneigh;
   firsttouch = fix_history->firstflag;
   firsthistory = fix_history->firstvalue;
 

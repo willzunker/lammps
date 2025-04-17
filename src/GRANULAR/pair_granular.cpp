@@ -461,16 +461,21 @@ void PairGranular::init_style()
     size_history = MAX(size_history, 1);
   }
 
+  bool mdr_defined = false;
   for (int n = 0; n < nmodels; n++) {
     model = models_list[n];
     int next_index = 0;
     for (int i = 0; i < NSUBMODELS; i++) {
       model->sub_models[i]->history_index = next_index;
+      if (model->sub_models[i]->name == "mdr") mdr_defined = true;
       next_index += size_max[i];
     }
   }
 
-  if (use_history) neighbor->add_request(this, NeighConst::REQ_SIZE|NeighConst::REQ_HISTORY);
+  int neigh_flags = NeighConst::REQ_SIZE | NeighConst::REQ_HISTORY;
+  if (mdr_defined) neigh_flags |= NeighConst::REQ_NEWTON_OFF;
+
+  if (use_history) neighbor->add_request(this, neigh_flags);
   else neighbor->add_request(this, NeighConst::REQ_SIZE);
 
   // if history is stored and first init, create Fix to store history

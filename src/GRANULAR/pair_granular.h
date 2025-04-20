@@ -78,6 +78,7 @@ class PairGranular : public Pair {
  private:
   int size_history;
   int heat_flag;
+  int mdr_defined;
 
   // optional user-specified global cutoff, per-type user-specified cutoffs
   double **cutoff_type;

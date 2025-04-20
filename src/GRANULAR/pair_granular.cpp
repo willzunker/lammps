@@ -263,7 +263,7 @@ void PairGranular::compute(int eflag, int vflag)
       scale3(factor_lj, torquesi);
       add3(torque[i], torquesi, torque[i]);
 
-      if (force->newton_pair || j < nlocal) {
+      if ((!mdr_defined && force->newton_pair) || j < nlocal) {
         sub3(f[j], forces, f[j]);
         scale3(factor_lj, torquesj);
         add3(torque[j], torquesj, torque[j]);
@@ -461,7 +461,7 @@ void PairGranular::init_style()
     size_history = MAX(size_history, 1);
   }
 
-  bool mdr_defined = false;
+  mdr_defined = false;
   for (int n = 0; n < nmodels; n++) {
     model = models_list[n];
     int next_index = 0;
@@ -474,9 +474,11 @@ void PairGranular::init_style()
 
   int neigh_flags = NeighConst::REQ_SIZE | NeighConst::REQ_HISTORY;
   if (mdr_defined) neigh_flags |= NeighConst::REQ_NEWTON_OFF;
-
+  
   if (use_history) neighbor->add_request(this, neigh_flags);
   else neighbor->add_request(this, NeighConst::REQ_SIZE);
+
+
 
   // if history is stored and first init, create Fix to store history
   // it replaces FixDummy, created in the constructor

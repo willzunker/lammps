@@ -130,8 +130,8 @@ void FixGranularMDR::setup_pre_force(int /*vflag*/)
       //            "Cannot currently define multiple MDR normal models in the pairstyle"); // need a more robust check, causes error even if multiple identical MDR models are defined which should be allowed.
       norm_model = dynamic_cast<GranSubModNormalMDR *>(pair_model->normal_model);
     } else {
-      error->all(FLERR, Error::NOLASTLINE,
-                 "Cannot combine MDR normal model with a different normal model in the pairstyle");
+      //error->all(FLERR, Error::NOLASTLINE,
+      //           "Cannot combine MDR normal model with a different normal model in the pairstyle");
     }
   }
 

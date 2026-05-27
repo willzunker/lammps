@@ -19,6 +19,7 @@
 #include "fix_granular_mdr.h"
 #include "granular_model.h"
 #include "math_const.h"
+#include "mdr_reconstruct.h"
 #include "modify.h"
 #include "update.h"
 
@@ -31,7 +32,6 @@ using namespace Granular_NS;
 using namespace MathConst;
 
 static constexpr double PISQ = 9.8696044010893579923;            // PI^2
-static constexpr double PIINV = 0.318309886183790691216;         // 1/PI
 static constexpr double PI27SQ = 266.479318829412648029;         // 27*PI^2
 static constexpr double PITOFIVETHIRDS = 6.73880859569814116838; // PI^(5/3)
 static constexpr double CBRT2 = 1.25992104989487319067;          // cbrt(2)
@@ -706,7 +706,7 @@ double GranSubModNormalMDR::calculate_forces()
     const double deltamax_MDR = *deltamax_MDR_offset;
 
     // average pressure along yield surface
-    const double pY = Y * (1.75 * exp(-4.4 * deltamax_MDR / R) + 1.0);
+    const double pY = mdr_pressure_yield(Y, deltamax_MDR, R);
 
     if (*Yflag_offset == 0.0 && delta_MDR >= deltamax_MDR) {
     const double phertz = 4 * Eeff * sqrt(delta_MDR) / (3 * MY_PI * sqrt(R));
@@ -726,51 +726,22 @@ double GranSubModNormalMDR::calculate_forces()
 
     // MDR force calculation
     double F_MDR;
-    double A, Ainv;               // height of elliptical indenter
-    double B;                     // width of elliptical indenter
-    double deltae1D;              // transformed elastic displacement
-    double deltaR;                // displacement correction
-    double amax, amaxsq;          // maximum experienced contact radius
     const double cA = *cA_offset; // contact area intercept
 
-    if (*Yflag_offset == 0.0) {
-      // elastic contact
-      A = 4.0 * R;
-      Ainv = 1.0 / A;
-      B = 2.0 * R;
-      deltae1D = delta_MDR;
-      amax = sqrt(deltamax_MDR * R);
-    } else {
-      // plastic contact
-      amax = sqrt(2.0 * deltamax_MDR * R - pow(deltamax_MDR, 2) + cA * PIINV);
-      amaxsq = amax * amax;
-      A = 4.0 * pY * Eeffinv * amax;
-      Ainv = 1.0 / A;
-      B = 2.0 * amax;
+    // deformed-surface (cap) geometry, shared with surface reconstruction
+    const MDRCapGeometry cap =
+        mdr_cap_geometry(*Yflag_offset, R, delta_MDR, deltamax_MDR, cA, pY, Eeff, Eeffinv, G, poiss);
+    const double A = cap.A;
+    const double Ainv = cap.Ainv;
+    const double B = cap.B;
+    const double deltae1D = cap.deltae1D;
+    const double amax = cap.amax;
+    const double a_na = cap.a_na;
 
-      // maximum transformed elastic displacement
-      const double deltae1Dmax = A * 0.5;
+    // rigid flat placement (plastic regime)
+    if (*Yflag_offset != 0.0 && history_update) *deltap_offset = cap.deltap;
 
-      // force caused by full submersion of elliptical indenter to depth of A/2
-      double Fmax = Eeff * (A * B * 0.25) * acos(1 - 2 * deltae1Dmax * Ainv);
-      Fmax -= (2 - 4 * deltae1Dmax * Ainv) * sqrt(deltae1Dmax * Ainv - pow(deltae1Dmax * Ainv, 2));
-
-      // depth of particle center
-      const double zR = R - (deltamax_MDR - deltae1Dmax);
-
-      deltaR = 2 * amaxsq * (-1 + poiss) - (-1 + 2 * poiss) * zR * (-zR + sqrt(amaxsq + pow(zR, 2)));
-      deltaR *= Fmax / (MY_2PI * amaxsq * G * sqrt(amaxsq + pow(zR, 2)));
-
-      // transformed elastic displacement
-      deltae1D = (delta_MDR - deltamax_MDR + deltae1Dmax + deltaR) / (1 + deltaR / deltae1Dmax);
-
-      // added for rigid flat placement
-      if (history_update) *deltap_offset = deltamax_MDR - (deltae1Dmax + deltaR);
-    }
-
-    double a_na;
     double a_fac = 0.99;
-    (deltae1D >= 0.0) ? a_na = B * sqrt(A - deltae1D) * sqrt(deltae1D) * Ainv : a_na = 0.0;
     double aAdh = *aAdh_offset;
     if (aAdh > a_fac * amax) aAdh = a_fac * amax;
 

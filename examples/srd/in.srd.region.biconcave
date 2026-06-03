@@ -1,0 +1,57 @@
+# Bug-fix regression test: gas confined OUTSIDE a sphere (side=out)
+# AND INSIDE an outer cylinder. This is the bi-concave geometry --
+# the inner sphere acts as a convex "punch bump" that the gas must avoid.
+#
+# Validates that the normal-direction fix in collision_regionwall_inexact
+# correctly pushes SRDs OUT of the side=out region (away from the bump),
+# not INTO it (which was the previous buggy behavior).
+
+units           lj
+atom_style      atomic
+dimension       3
+
+variable        Rcyl    equal 6.0
+variable        Hcyl    equal 4.0
+variable        Rbump   equal 2.0       # convex bump in the middle of the cavity
+variable        Tsrd    equal 1.0
+variable        msrd    equal 0.01
+variable        Lpad    equal 1.0
+
+variable        Lx      equal ${Rcyl}+${Lpad}
+variable        Lz      equal ${Hcyl}+${Lpad}
+region          box block -${Lx} ${Lx} -${Lx} ${Lx} -${Lz} ${Lz}
+create_box      1 box
+
+# define gas-fillable region for create_atoms: inside die AND outside bump
+# units box so the radii are in actual sigma units regardless of the
+# lattice command's scale below.
+region          die_fill cylinder z 0 0 ${Rcyl} -${Hcyl} ${Hcyl} side in units box
+region          bump_fill sphere 0 0 0 ${Rbump} side out units box
+region          gas_fill intersect 2 die_fill bump_fill
+
+lattice         sc 20.0
+create_atoms    1 region gas_fill
+mass            1 ${msrd}
+velocity        all create ${Tsrd} 12345 loop geom
+
+atom_modify     first empty
+group           empty type 2
+neighbor        0.3 bin
+neigh_modify    delay 1 every 1 check no
+comm_modify     group empty
+
+timestep        0.02
+
+fix             1 all srd 1 NULL ${Tsrd} 1.0 49894 collision slip shift yes 73221
+
+# Two SRD wall fixes: outer die (interior=1) and inner bump (interior=0).
+# Each is a primitive region, so we avoid the unverified compound-region path.
+region          die cylinder z 0 0 ${Rcyl} -${Hcyl} ${Hcyl} side in units box
+region          bump sphere 0 0 0 ${Rbump} side out units box
+fix             2 all wall/srd/region die phantom yes
+fix             3 all wall/srd/region bump phantom yes
+
+thermo_style    custom step atoms temp f_1[9] &
+                f_2[1] f_2[2] f_2[3] f_3[1] f_3[2] f_3[3]
+thermo          200
+run             2000

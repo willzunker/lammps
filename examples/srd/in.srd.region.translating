@@ -1,0 +1,48 @@
+# Phase 3: SRD gas in a sphere region translating at constant velocity.
+# Expectation: SRDs stay confined (count conserved), net force on the wall
+# in the motion direction is NEGATIVE (drag opposing motion).
+
+units           lj
+atom_style      atomic
+dimension       3
+
+variable        Rsphere equal 5.0
+# Pick vpunch << v_thermal = sqrt(3*Tsrd/m) = 17 so the gas equilibrates
+# faster than the sphere translates and the wall-following regime is valid.
+variable        vpunch  equal 0.5
+variable        Tsrd    equal 1.0
+variable        msrd    equal 0.01
+# Box must be large enough that the sphere stays well inside over the run:
+# displacement = vpunch * dt * nsteps; need Lpad > Rsphere + displacement.
+variable        Lpad    equal 15.0
+
+region          box block -${Lpad} ${Lpad} -${Lpad} ${Lpad} -${Lpad} ${Lpad}
+create_box      1 box
+
+# initial sphere position; translate in +z over the run.
+variable        dxz     equal vdisplace(0,${vpunch})   # = vpunch * elapsed_time
+region          gas sphere 0 0 0 ${Rsphere} side in move NULL NULL v_dxz
+
+lattice         sc 20.0
+create_atoms    1 region gas
+mass            1 ${msrd}
+velocity        all create ${Tsrd} 12345 loop geom
+
+atom_modify     first empty
+group           empty type 2
+neighbor        0.3 bin
+neigh_modify    delay 1 every 1 check no
+comm_modify     group empty
+
+timestep        0.02
+
+fix             1 all srd 1 NULL ${Tsrd} 1.0 49894 collision slip shift yes 73221
+fix             2 all wall/srd/region gas phantom yes
+
+# Time-averaged wall force components (drag should be in -z if punch goes +z).
+fix             favg all ave/time 1 200 200 f_2[1] f_2[2] f_2[3] mode scalar &
+                file wall_force.translating.dat
+
+thermo_style    custom step atoms temp f_1[9] f_2[1] f_2[2] f_2[3]
+thermo          200
+run             2000

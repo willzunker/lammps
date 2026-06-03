@@ -1,0 +1,53 @@
+# Phase 3: SRD gas in a sphere region with time-varying radius.
+# Compresses the gas (sphere shrinks from R=5 to R=4 over the run).
+# Expectation for slip walls (effectively adiabatic, no thermostat):
+#   T_final/T_initial = (V_initial/V_final)^(gamma-1) = (5/4)^3^(2/3)
+#                     = (125/64)^(2/3) ~= 1.55
+# So gas temperature should rise from 1.0 to ~1.55 over the compression.
+
+units           lj
+atom_style      atomic
+dimension       3
+
+variable        R0       equal 5.0     # initial radius
+variable        Rfinal   equal 4.0     # final radius after the run
+variable        Tsrd     equal 1.0
+variable        msrd     equal 0.01
+variable        nsteps   equal 2000
+variable        dt       equal 0.02
+
+# Linear shrink rate: dR/dt so we go from R0 to Rfinal over the run.
+variable        rdot     equal (${Rfinal}-${R0})/(${nsteps}*${dt})
+# vdisplace(c0,v) returns c0 + v*elapsed_time; here c0=R0, v=rdot, so
+# at time t the variable evaluates to R0 + rdot*t.
+variable        Rsphere  equal vdisplace(${R0},${rdot})
+
+region          box block -6 6 -6 6 -6 6 units box
+create_box      1 box
+
+region          gas_fill sphere 0 0 0 ${R0} side in units box
+lattice         sc 20.0
+create_atoms    1 region gas_fill
+mass            1 ${msrd}
+velocity        all create ${Tsrd} 12345 loop geom
+
+atom_modify     first empty
+group           empty type 2
+neighbor        0.3 bin
+neigh_modify    delay 1 every 1 check no
+comm_modify     group empty
+
+timestep        ${dt}
+
+# The shrinking-radius sphere: r is supplied as v_Rsphere (varshape region).
+# Region's shape_update is invoked from wall_params via region->prematch each step.
+region          gas sphere 0 0 0 v_Rsphere side in units box
+
+fix             1 all srd 1 NULL ${Tsrd} 1.0 49894 collision slip shift yes 73221
+fix             2 all wall/srd/region gas phantom yes
+
+# Print every 100 steps so we can watch T rise.
+thermo_style    custom step atoms temp f_1[9] v_Rsphere
+thermo          100
+
+run             ${nsteps}

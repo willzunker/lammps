@@ -27,6 +27,7 @@
 #include "error.h"
 #include "fix_deform.h"
 #include "fix_wall_srd.h"
+#include "fix_wall_srd_region.h"
 #include "force.h"
 #include "group.h"
 #include "math_const.h"
@@ -36,6 +37,7 @@
 #include "neighbor.h"
 #include "random_mars.h"
 #include "random_park.h"
+#include "region.h"
 #include "update.h"
 
 #include <cmath>
@@ -46,7 +48,7 @@ using namespace FixConst;
 using namespace MathConst;
 
 enum { SLIP, NOSLIP };
-enum { SPHERE, ELLIPSOID, LINE, TRIANGLE, WALL };
+enum { SPHERE, ELLIPSOID, LINE, TRIANGLE, WALL, REGIONWALL };
 enum { INSIDE_ERROR, INSIDE_WARN, INSIDE_IGNORE };
 enum { BIG_MOVE, SRD_MOVE, SRD_ROTATE };
 enum { CUBIC_ERROR, CUBIC_WARN };
@@ -81,7 +83,9 @@ static const char cite_fix_srd[] =
 
 FixSRD::FixSRD(LAMMPS *lmp, int narg, char **arg) :
     Fix(lmp, narg, arg), wallfix(nullptr), wallwhich(nullptr), xwall(nullptr), xwallhold(nullptr),
-    vwall(nullptr), fwall(nullptr), avec_ellipsoid(nullptr), avec_line(nullptr), avec_tri(nullptr),
+    vwall(nullptr), fwall(nullptr), regionwall_exist(0), n_regionwall(0),
+    regionwall_fix(nullptr), phantom_M(0.0), vwall_contact{0.0, 0.0, 0.0},
+    avec_ellipsoid(nullptr), avec_line(nullptr), avec_tri(nullptr),
     random(nullptr), randomshift(nullptr), flocal(nullptr), tlocal(nullptr), biglist(nullptr),
     binhead(nullptr), binnext(nullptr), sbuf1(nullptr), sbuf2(nullptr), rbuf1(nullptr),
     rbuf2(nullptr), nbinbig(nullptr), binbig(nullptr), binsrd(nullptr), stencil(nullptr)
@@ -330,6 +334,8 @@ FixSRD::~FixSRD()
   memory->destroy(binsrd);
   memory->destroy(stencil);
   memory->sfree(biglist);
+
+  delete[] regionwall_fix;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -382,6 +388,41 @@ void FixSRD::init()
       if (wallfix->overlap && overlap == 0 && me == 0)
         error->warning(FLERR, "Fix SRD walls overlap but fix srd overlap not set");
     }
+  }
+
+  // discover all fix wall/srd/region instances (Phase 1: any number allowed,
+  // each holds one region; combine geometries via region intersect/union).
+  // count first, then allocate, then populate -- the discovery has to run
+  // every init() because fix indices may shift across run commands.
+
+  delete[] regionwall_fix;
+  regionwall_fix = nullptr;
+  n_regionwall = 0;
+  regionwall_exist = 0;
+  for (int m = 0; m < modify->nfix; m++)
+    if (strcmp(modify->fix[m]->style, "wall/srd/region") == 0) n_regionwall++;
+  if (n_regionwall > 0) {
+    regionwall_exist = 1;
+    regionwall_fix = new FixWallSRDRegion *[n_regionwall];
+    int k = 0;
+    for (int m = 0; m < modify->nfix; m++)
+      if (strcmp(modify->fix[m]->style, "wall/srd/region") == 0)
+        regionwall_fix[k++] = dynamic_cast<FixWallSRDRegion *>(modify->fix[m]);
+    // Phase 1: no exact collision-time solver for region walls, and
+    // collisions_multi() requires exact solvers. Forbid the combination
+    // until Phase 5 adds per-region-style exact solvers.
+    if (overlap == 1)
+      error->all(FLERR,
+                 "Fix wall/srd/region cannot be combined with fix srd "
+                 "overlap=yes in Phase 1 (no exact collision solver yet).");
+    // Phase 1.5: virtual-particle injection assumes orthogonal cubic bins.
+    // For a triclinic box, cell geometry would need a lamda-coordinate
+    // transform that we haven't implemented yet. Error out rather than
+    // silently producing wrong results.
+    if (triclinic)
+      error->all(FLERR,
+                 "Fix wall/srd/region not yet supported with a triclinic "
+                 "simulation box (Phase 1.5 limitation).");
   }
 
   // set change_flags if box size or shape changes
@@ -456,11 +497,16 @@ void FixSRD::setup(int /*vflag*/)
 
   // setup search bins and search stencil based on these distances
 
-  if (bigexist || wallexist) {
+  if (bigexist || wallexist || regionwall_exist) {
     setup_search_bins();
     setup_search_stencil();
   } else
     nbins2 = 0;
+
+  // Phase 1.5: compute target bulk SRD density per cell for the virtual-
+  // particle fill at curved walls. Requires binsize1x set by parameterize();
+  // regions assumed static so this is a one-time computation.
+  if (regionwall_exist) compute_phantom_target_density();
 
   // perform first binning of SRD and big particles and walls
   // set reneighflag to turn off SRD rotation
@@ -494,7 +540,7 @@ void FixSRD::pre_neighbor()
   // set index ptrs to BIG particles and to WALLS
   // big_static() adds static properties to info list
 
-  if (bigexist || wallexist) {
+  if (bigexist || wallexist || regionwall_exist) {
     if (bigexist) {
       if (biggroup == atom->firstgroup)
         nbig = atom->nfirst + atom->nghost;
@@ -510,6 +556,7 @@ void FixSRD::pre_neighbor()
 
     int ninfo = nbig;
     if (wallexist) ninfo += nwall;
+    if (regionwall_exist) ninfo += n_regionwall;
 
     if (ninfo > maxbig) {
       maxbig = ninfo;
@@ -537,6 +584,22 @@ void FixSRD::pre_neighbor()
       }
       wallfix->wall_params(1);
     }
+
+    // region walls follow the planar walls in biglist
+    if (regionwall_exist) {
+      int base = nbig + (wallexist ? nwall : 0);
+      for (int k = 0; k < n_regionwall; k++) {
+        Big &b = biglist[base + k];
+        b.index = k;
+        b.type = REGIONWALL;
+        b.region = regionwall_fix[k]->region;
+        b.rwall_index = k;
+        // static region: zero omega so slip()/noslip()'s vsurf contribution
+        // from omega x (xsurf-xb) vanishes (Phase 1)
+        b.omega[0] = b.omega[1] = b.omega[2] = 0.0;
+        regionwall_fix[k]->wall_params(1);
+      }
+    }
   }
 
   // if simulation box size changes, reset velocity bins
@@ -545,7 +608,7 @@ void FixSRD::pre_neighbor()
 
   if (change_size) setup_bounds();
   if (change_size) setup_velocity_bins();
-  if ((change_size || change_shape) && (bigexist || wallexist)) {
+  if ((change_size || change_shape) && (bigexist || wallexist || regionwall_exist)) {
     setup_search_bins();
     setup_search_stencil();
   }
@@ -562,7 +625,7 @@ void FixSRD::pre_neighbor()
   int nfirst = nlocal;
   if (bigexist && biggroup == atom->firstgroup) nfirst = atom->nfirst;
 
-  if (bigexist || wallexist)
+  if (bigexist || wallexist || regionwall_exist)
     for (i = 0; i < nbins2; i++) nbinbig[i] = 0;
 
   if (bigexist) {
@@ -685,6 +748,25 @@ void FixSRD::pre_neighbor()
     }
   }
 
+  // map region walls into search bins.
+  // Phase 1 conservative strategy: add every region wall to every search
+  // bin. This is O(n_regionwall * nbins2), but n_regionwall is typically
+  // very small (~1-3 for a tablet die) and the bins-per-wall cost is
+  // negligible compared to actual collision work. A bbox-based mapping
+  // using region->extent_* is the obvious optimization, deferred.
+
+  if (regionwall_exist) {
+    int base = nbig + (wallexist ? nwall : 0);
+    for (int k = 0; k < n_regionwall; k++) {
+      int biglist_idx = base + k;
+      for (int ib = 0; ib < nbins2; ib++) {
+        if (nbinbig[ib] == ATOMPERBIN)
+          error->all(FLERR, "Fix SRD: too many walls in bin");
+        binbig[ib][nbinbig[ib]++] = biglist_idx;
+      }
+    }
+  }
+
   // rotate SRD velocities on SRD timestep
   // done now since all SRDs are currently inside my sub-domain
 
@@ -762,9 +844,11 @@ void FixSRD::post_force(int /*vflag*/)
 
   // detect collision of SRDs with BIG particles or walls
 
-  if (bigexist || wallexist) {
+  if (bigexist || wallexist || regionwall_exist) {
     if (bigexist) big_dynamic();
     if (wallexist) wallfix->wall_params(0);
+    if (regionwall_exist)
+      for (int k = 0; k < n_regionwall; k++) regionwall_fix[k]->wall_params(0);
     if (overlap)
       collisions_multi();
     else
@@ -906,11 +990,21 @@ void FixSRD::reset_velocities()
     vbin[i].vsum[1] = vsum[1];
     vbin[i].vsum[2] = vsum[2];
     vbin[i].n = n;
+    // value[1] holds the per-bin virtual particle count (Phase 1.5);
+    // owner-only, used in the final-T diagnostic to use n_real = n - n_v.
+    vbin[i].value[1] = 0.0;
     if (vbin[i].owner)
       vbin[i].random = random->uniform();
     else
       vbin[i].random = 0.0;
   }
+
+  // Lamura/Gompper virtual-particle fill for any region wall.
+  // Owner-only injection: adds virtuals to vbin[].vsum and .n BEFORE comm
+  // aggregates across procs, so all procs see a consistent augmented bin
+  // population. Cell-averaged velocity then includes the wall-mean velocity
+  // contribution, restoring true no-slip and bulk density at curved walls.
+  if (regionwall_exist) inject_virtual_particles();
 
   // communicate bin info for bins which more than 1 proc contribute to
 
@@ -1032,8 +1126,23 @@ void FixSRD::reset_velocities()
 
   for (i = 0; i < nbins; i++) {
     if (vbin[i].owner) {
-      if (vbin[i].n > 1) {
-        srd_bin_temp += vbin[i].value[0] / (vbin[i].n - dof_temp);
+      // n_real excludes virtual particles (Phase 1.5): vsq was accumulated
+      // only over real SRDs in the rotation loop, so the divisor must too.
+      // With virtuals biasing vave, the variance-of-vave contribution to
+      // each real particle's (v-vave)^2 is sigma^2/M_tot (rather than
+      // sigma^2/n_real for the no-virtual case). The generalized Bessel-
+      // corrected divisor is n_real * (M_tot - 1) / M_tot, which reduces
+      // exactly to (n_real - 1) when M_tot == n_real (dof_temp=1 default).
+      int n_real = vbin[i].n - static_cast<int>(vbin[i].value[1]);
+      int M_tot = vbin[i].n;
+      if (n_real > 1 && M_tot > 1) {
+        double denom;
+        if (dof_temp == 1)
+          denom = static_cast<double>(n_real) * (M_tot - 1.0) / M_tot;
+        else
+          // deform+tstat edge case: no Bessel correction in the original code
+          denom = static_cast<double>(n_real);
+        srd_bin_temp += vbin[i].value[0] / denom;
         srd_bin_count++;
       }
     }
@@ -1053,6 +1162,216 @@ void FixSRD::reset_velocities()
         }
       }
   }
+}
+
+/* ----------------------------------------------------------------------
+   Lamura/Gompper virtual ("phantom") particle fill at curved walls.
+   For every SRD collision cell intersected by a region wall, inject enough
+   virtual particles into the "outside-the-fluid" volume of that cell to
+   restore the total cell occupancy to the bulk value (srd_per_cell).
+   Each virtual particle's velocity is drawn from a Maxwell-Boltzmann at
+   the wall temperature (sigma); the mean is zero for static walls (Phase 1)
+   and will be region->velocity_contact at the virtual's position for moving
+   walls (Phase 3).
+   Virtual particles are added to vbin[].vsum and vbin[].n BEFORE the cell
+   rotation averages; they are never actually stored as atoms and are
+   "discarded" by simply not appearing in binhead/binnext (so the rotation
+   loop only touches real SRDs).
+   References:
+     Lamura, Gompper, Ihle, Kroll, EPL 56:319 (2001) -- original
+     Bolintineanu, Lechman, Plimpton, Grest, PRE 86:066703 (2012) --
+       cited in doc/src/fix_srd.rst; spells out when this is required
+       (collisional-dominated dense MPCD regime, exactly our case).
+   Phase 1.5 limitations:
+     - Orthogonal box only (triclinic deferred)
+     - Static regions only (zero wall velocity at virtuals)
+     - Owner-only injection; n_virtual is owner-local (stored in
+       vbin[].value[1]) and is NOT communicated, so the tstat divisor
+       uses the augmented n_total with a small bias in boundary cells.
+       Final-T diagnostic uses n_real correctly on owned bins.
+------------------------------------------------------------------------- */
+
+void FixSRD::inject_virtual_particles()
+{
+  if (triclinic) return;  // Phase 1.5: orthogonal only
+
+  double *corner = shifts[shiftflag].corner;
+  int *binlo = shifts[shiftflag].binlo;
+  int nbinx = shifts[shiftflag].nbinx;
+  int nbiny = shifts[shiftflag].nbiny;
+  int nbins = shifts[shiftflag].nbins;
+  int nbinz = (dimension == 3) ? nbins / (nbinx * nbiny) : 1;
+  BinAve *vbin = shifts[shiftflag].vbin;
+
+  const int N_test = 8;             // MC samples per bin to estimate f_out
+  const double bsx = binsize1x;
+  const double bsy = binsize1y;
+  const double bsz = (dimension == 3) ? binsize1z : 0.0;
+  // Use phantom_M (NSRD * V_cell / V_fluid) as the bulk target. srd_per_cell
+  // would under-count when regions occupy <100% of the box (e.g. sphere in
+  // cube), because srd_per_cell divides NSRD by ALL cells.
+  const double M = (phantom_M > 0.0) ? phantom_M : srd_per_cell;
+
+  // pre-fetch region pointers (only those with phantom=yes participate in
+  // the virtual-particle fill; others are bare bounce-back).
+  int n_active = 0;
+  for (int k = 0; k < n_regionwall; k++)
+    if (regionwall_fix[k]->phantom) n_active++;
+  if (n_active == 0) return;
+
+  Region **rlist = new Region *[n_active];
+  int idx = 0;
+  for (int k = 0; k < n_regionwall; k++) {
+    if (!regionwall_fix[k]->phantom) continue;
+    rlist[idx++] = regionwall_fix[k]->region;
+  }
+  int n_rfx = n_active;
+
+  for (int i = 0; i < nbins; i++) {
+    if (!vbin[i].owner) continue;
+    // Skip cells with no real SRDs. Virtuals only matter if they bias the
+    // vave that real particles get rotated around, so a cell with zero
+    // reals gets no useful work from injection. This drops the count from
+    // O(N_cells_in_box) to O(N_boundary_cells), typically a 10x win.
+    if (binhead[i] < 0) continue;
+
+    // decode bin index -> physical bbox
+    int lx = i % nbinx;
+    int ly = (i / nbinx) % nbiny;
+    int lz = i / (nbinx * nbiny);
+    double bxlo = corner[0] + (binlo[0] + lx) * bsx;
+    double bylo = corner[1] + (binlo[1] + ly) * bsy;
+    double bzlo = (dimension == 3) ? corner[2] + (binlo[2] + lz) * bsz : corner[2];
+
+    // Monte Carlo estimate of the "outside-fluid" volume fraction.
+    // Outside = outside ANY confining region (interior=1 -> SRD must be
+    // inside the region to be in fluid; interior=0 inverts the sense).
+    int n_out = 0;
+    for (int s = 0; s < N_test; s++) {
+      double xs = bxlo + bsx * random->uniform();
+      double ys = bylo + bsy * random->uniform();
+      double zs = (dimension == 3) ? bzlo + bsz * random->uniform() : bzlo;
+
+      // A point is in the FLUID if every region's match() returns 1.
+      // Region::match already encodes the interior/side flag:
+      //   side=in (interior=1): match=1 iff inside the geometric primitive
+      //   side=out (interior=0): match=1 iff outside the geometric primitive
+      // In both cases, match=1 means "in the gas region". So fluid =
+      // (all match==1); outside-the-fluid = (any match==0). Branching on
+      // `interior` here would double-invert and was the bug that gave a
+      // huge phantom_M on bi-concave tests.
+      bool outside = false;
+      for (int k = 0; k < n_rfx; k++) {
+        if (!rlist[k]->match(xs, ys, zs)) { outside = true; break; }
+      }
+      if (outside) n_out++;
+    }
+
+    if (n_out == 0) continue;  // bin entirely in fluid -> no virtuals
+
+    double f_out = static_cast<double>(n_out) / N_test;
+    int N_v = static_cast<int>(std::lround(M * f_out));
+    if (N_v <= 0) continue;
+
+    // Inject N_v virtuals with Gaussian velocities at sigma (= Maxwell-
+    // Boltzmann std per component at Tsrd). Static wall -> zero mean.
+    double sx = 0.0, sy = 0.0, sz = 0.0;
+    for (int k = 0; k < N_v; k++) {
+      sx += sigma * random->gaussian();
+      sy += sigma * random->gaussian();
+      if (dimension == 3) sz += sigma * random->gaussian();
+    }
+    vbin[i].vsum[0] += sx;
+    vbin[i].vsum[1] += sy;
+    vbin[i].vsum[2] += sz;
+    vbin[i].n += N_v;
+    vbin[i].value[1] = static_cast<double>(N_v);
+  }
+
+  delete[] rlist;
+}
+
+/* ----------------------------------------------------------------------
+   Compute the target bulk per-cell SRD count (phantom_M) for the virtual-
+   particle fill. This is NSRD_total * V_cell / V_fluid, where V_fluid is
+   the volume confined by the union of all region walls (intersected with
+   the simulation box).
+
+   We MC-sample V_fluid: throw N_test random points in the box, count the
+   fraction inside the fluid (= inside every interior=1 region AND outside
+   every interior=0 region). Multiply by V_box for V_fluid.
+
+   Only proc 0 samples; result is broadcast. Phase 1.5 assumes static
+   regions, so this runs once in setup() and the cached value is reused.
+------------------------------------------------------------------------- */
+
+void FixSRD::compute_phantom_target_density()
+{
+  if (!regionwall_exist) {
+    phantom_M = 0.0;
+    return;
+  }
+
+  // total SRD count across procs (group of fix srd)
+  int nsrd_local = 0;
+  int *mask = atom->mask;
+  int nlocal = atom->nlocal;
+  for (int i = 0; i < nlocal; i++)
+    if (mask[i] & groupbit) nsrd_local++;
+  int nsrd_total = 0;
+  MPI_Allreduce(&nsrd_local, &nsrd_total, 1, MPI_INT, MPI_SUM, world);
+
+  if (nsrd_total == 0) {
+    phantom_M = 0.0;
+    return;
+  }
+
+  // MC-sample V_fluid (proc 0 only -- it's geometry, identical on all procs)
+  const int N_test = 200000;
+  double *boxlo = domain->boxlo;
+  double *boxhi = domain->boxhi;
+  double Lx = boxhi[0] - boxlo[0];
+  double Ly = boxhi[1] - boxlo[1];
+  double Lz = (dimension == 3) ? boxhi[2] - boxlo[2] : 1.0;
+  double V_box = Lx * Ly * Lz;
+
+  long long n_in_fluid_l = 0;
+  if (me == 0) {
+    for (int s = 0; s < N_test; s++) {
+      double x = boxlo[0] + Lx * random->uniform();
+      double y = boxlo[1] + Ly * random->uniform();
+      double z = (dimension == 3) ? boxlo[2] + Lz * random->uniform() : 0.0;
+      // Same logic as inject_virtual_particles: fluid = (all match==1).
+      // Region::match already inverts via the side=in/out flag.
+      bool in_fluid = true;
+      for (int k = 0; k < n_regionwall; k++) {
+        if (!regionwall_fix[k]->region->match(x, y, z)) {
+          in_fluid = false; break;
+        }
+      }
+      if (in_fluid) n_in_fluid_l++;
+    }
+  }
+  MPI_Bcast(&n_in_fluid_l, 1, MPI_LONG_LONG, 0, world);
+
+  if (n_in_fluid_l == 0) {
+    if (me == 0)
+      error->warning(FLERR,
+                     "Fix wall/srd/region: MC sampling found zero fluid "
+                     "volume; phantom-particle fill disabled.");
+    phantom_M = 0.0;
+    return;
+  }
+
+  double V_fluid = V_box * static_cast<double>(n_in_fluid_l) / N_test;
+  double V_cell = binsize1x * binsize1y * ((dimension == 3) ? binsize1z : 1.0);
+  phantom_M = nsrd_total * V_cell / V_fluid;
+
+  if (me == 0)
+    utils::logmesg(lmp,
+                   "  Fix SRD: phantom-particle target bulk M = {:.4f} "
+                   "(NSRD = {}, V_fluid = {:.4f}, V_cell = {:.4f})\n",
+                   phantom_M, nsrd_total, V_fluid, V_cell);
 }
 
 /* ----------------------------------------------------------------------
@@ -1292,6 +1611,8 @@ void FixSRD::collisions_single()
           inside = inside_sphere(x[i], x[j], big);
         else if (type == ELLIPSOID)
           inside = inside_ellipsoid(x[i], x[j], big);
+        else if (type == REGIONWALL)
+          inside = inside_regionwall(x[i], big);
         else
           inside = inside_wall(x[i], j);
 
@@ -1302,7 +1623,11 @@ void FixSRD::collisions_single()
             else if (type == ELLIPSOID)
               t_remain =
                   collision_ellipsoid_exact(x[i], x[j], v[i], v[j], big, xscoll, xbcoll, norm);
-            else
+            else if (type == REGIONWALL) {
+              // Phase 1: no exact solver for region walls; fall back to inexact.
+              t_remain = 0.5 * dt;
+              collision_regionwall_inexact(x[i], big, xscoll, xbcoll, norm);
+            } else
               t_remain = collision_wall_exact(x[i], j, v[i], xscoll, xbcoll, norm);
 
           } else {
@@ -1311,6 +1636,8 @@ void FixSRD::collisions_single()
               collision_sphere_inexact(x[i], x[j], big, xscoll, xbcoll, norm);
             else if (type == ELLIPSOID)
               collision_ellipsoid_inexact(x[i], x[j], big, xscoll, xbcoll, norm);
+            else if (type == REGIONWALL)
+              collision_regionwall_inexact(x[i], big, xscoll, xbcoll, norm);
             else
               collision_wall_inexact(x[i], j, xscoll, xbcoll, norm);
           }
@@ -1324,14 +1651,18 @@ void FixSRD::collisions_single()
             ninside++;
             if (insideflag == INSIDE_ERROR || insideflag == INSIDE_WARN) {
               std::string mesg;
-              if (type != WALL)
-                mesg = fmt::format("SRD particle {} started inside big particle {} on step {} "
-                                   " bounce {}",
-                                   tag[i], tag[j], update->ntimestep, ibounce + 1);
-              else
+              if (type == WALL)
                 mesg = fmt::format("SRD particle {} started inside wall {} on step {} "
                                    "bounce {}",
                                    tag[i], j, update->ntimestep, ibounce + 1);
+              else if (type == REGIONWALL)
+                mesg = fmt::format("SRD particle {} started inside region wall {} on step {} "
+                                   "bounce {}",
+                                   tag[i], j, update->ntimestep, ibounce + 1);
+              else
+                mesg = fmt::format("SRD particle {} started inside big particle {} on step {} "
+                                   " bounce {}",
+                                   tag[i], tag[j], update->ntimestep, ibounce + 1);
 
               if (insideflag == INSIDE_ERROR)
                 error->one(FLERR, mesg);
@@ -1342,15 +1673,19 @@ void FixSRD::collisions_single()
           }
 
           if (collidestyle == SLIP) {
-            if (type != WALL)
-              slip(v[i], v[j], x[j], big, xscoll, norm, vsnew);
-            else
+            if (type == WALL)
               slip_wall(v[i], j, norm, vsnew);
-          } else {
-            if (type != WALL)
-              noslip(v[i], v[j], x[j], big, -1, xscoll, norm, vsnew);
+            else if (type == REGIONWALL)
+              slip_region(v[i], big, xscoll, norm, vsnew);
             else
+              slip(v[i], v[j], x[j], big, xscoll, norm, vsnew);
+          } else {
+            if (type == WALL)
               noslip(v[i], nullptr, x[j], big, j, xscoll, norm, vsnew);
+            else if (type == REGIONWALL)
+              noslip(v[i], nullptr, xscoll, big, -1, xscoll, norm, vsnew);
+            else
+              noslip(v[i], v[j], x[j], big, -1, xscoll, norm, vsnew);
           }
 
           if (dimension == 2) vsnew[2] = 0.0;
@@ -1370,10 +1705,12 @@ void FixSRD::collisions_single()
 
           if (collidestyle == SLIP && type == SPHERE)
             force_torque(v[i], vsnew, xscoll, xbcoll, f[j], nullptr);
-          else if (type != WALL)
-            force_torque(v[i], vsnew, xscoll, xbcoll, f[j], torque[j]);
           else if (type == WALL)
             force_wall(v[i], vsnew, j);
+          else if (type == REGIONWALL)
+            force_regionwall(v[i], vsnew, big);
+          else
+            force_torque(v[i], vsnew, xscoll, xbcoll, f[j], torque[j]);
 
           ibin = binsrd[i] = update_srd(i, t_remain, xscoll, vsnew, x[i], v[i]);
 
@@ -1456,6 +1793,9 @@ void FixSRD::collisions_multi()
           inside = inside_line(x[i], x[j], v[i], v[j], big, dt);
         else if (type == TRIANGLE)
           inside = inside_tri(x[i], x[j], v[i], v[j], big, dt);
+        else if (type == REGIONWALL)
+          // defensive: init() errors out before we get here, but be safe
+          error->one(FLERR, "Region walls not supported with overlap=yes (Phase 1)");
         else
           inside = inside_wall(x[i], j);
 
@@ -2390,11 +2730,21 @@ void FixSRD::noslip(double *vs, double *vb, double *xb, Big *big, int iwall, dou
 
   // add in velocity of collision pt
   // for WALL: velocity of wall in one dim
+  // for REGIONWALL: zero in Phase 1 (static regions); Phase 3 will pull
+  //   wall-contact velocity from region->velocity_contact()
   // else: translation/rotation of BIG particle
 
   if (big->type == WALL) {
     int dim = wallwhich[iwall] / 2;
     vsnew[dim] += vwall[iwall];
+
+  } else if (big->type == REGIONWALL) {
+    // Phase 3: surface velocity at contact (translation + rotation + dR/dt)
+    // is stashed by collision_regionwall_inexact in vwall_contact. Zero for
+    // static regions, nonzero for moving/varshape ones.
+    vsnew[0] += vwall_contact[0];
+    vsnew[1] += vwall_contact[1];
+    vsnew[2] += vwall_contact[2];
 
   } else {
     double *omega = big->omega;
@@ -2454,6 +2804,217 @@ void FixSRD::force_wall(double *vsold, double *vsnew, int iwall)
   fwall[iwall][0] -= dpdt[0];
   fwall[iwall][1] -= dpdt[1];
   fwall[iwall][2] -= dpdt[2];
+}
+
+// ===========================================================================
+// REGION-WALL routines (Phase 1: static regions, inexact collision)
+// ===========================================================================
+
+/* ----------------------------------------------------------------------
+   check if SRD particle S is "inside" a region-defined wall.
+   For SRD bounce-back, "inside the wall" means the SRD has crossed the
+   confining surface (i.e., is no longer inside the confining region for
+   interior=1, or has entered the excluded region for interior=0).
+   Region::match returns 1 when the point is inside the region (in the
+   sense determined by the region's `interior` flag), so a no-match
+   means we need to reflect.
+------------------------------------------------------------------------- */
+
+int FixSRD::inside_regionwall(double *xs, Big *big)
+{
+  return !big->region->match(xs[0], xs[1], xs[2]);
+}
+
+/* ----------------------------------------------------------------------
+   inexact collision: push escaped SRD onto the region surface at end of
+   step (mirrors collision_wall_inexact's "push-to-surface" convention).
+
+   Region::surface() only returns contacts from the "valid" side (controlled
+   by region->interior). An SRD that has crossed to the wrong side won't
+   show up there, so we call surface_interior/exterior directly with the
+   opposite sense. For an interior=1 (confining) region, an escaped SRD
+   is on the exterior side -> use surface_exterior().
+
+   Region::contact[0].delx/dely/delz is the vector FROM the nearest surface
+   point TO the particle, so the surface point is xs - (delx,dely,delz).
+   The inward normal (pointing back into the region where the SRD belongs)
+   is therefore -(delx,dely,delz)/r for interior=1, +sign for interior=0.
+
+   We use a very large cutoff -- we want the geometry info regardless of
+   how far the SRD escaped (escape should be small under stable SRD dt
+   but we don't want false-zeroes from a tight cutoff).
+------------------------------------------------------------------------- */
+
+void FixSRD::collision_regionwall_inexact(double *xs, Big *big, double *xscoll,
+                                          double *xbcoll, double *norm)
+{
+  Region *region = big->region;
+
+  // Phase 3 trick: temporarily flip region->interior so the public surface()
+  // call dispatches to the OPPOSITE-side surface function -- which is what
+  // we need for a bounce-back of an SRD that has already crossed. Using the
+  // public surface() (instead of surface_interior/_exterior directly) lets
+  // Region apply its own inverse_transform and varshape updates -- essential
+  // for dynamic regions, harmless for static ones.
+  int saved_interior = region->interior;
+  region->interior = 1 - saved_interior;
+  int nc = region->surface(xs[0], xs[1], xs[2], BIG);
+  region->interior = saved_interior;
+
+  if (nc == 0) {
+    // Shouldn't happen: inside_regionwall said the SRD escaped, so the
+    // opposite-side surface query should yield a contact. Bail safely by
+    // leaving the SRD where it is with an outward normal; the SRD will be
+    // caught next step (or the srdlo/srdhi escape check will fire).
+    xscoll[0] = xs[0]; xscoll[1] = xs[1]; xscoll[2] = xs[2];
+    xbcoll[0] = xs[0]; xbcoll[1] = xs[1]; xbcoll[2] = xs[2];
+    norm[0] = 1.0; norm[1] = 0.0; norm[2] = 0.0;
+    vwall_contact[0] = vwall_contact[1] = vwall_contact[2] = 0.0;
+    return;
+  }
+
+  // pick the closest contact (relevant for compound regions; for plain
+  // sphere/cylinder there's only one contact anyway)
+  int icmin = 0;
+  for (int ic = 1; ic < nc; ic++)
+    if (region->contact[ic].r < region->contact[icmin].r) icmin = ic;
+
+  double dx = region->contact[icmin].delx;
+  double dy = region->contact[icmin].dely;
+  double dz = region->contact[icmin].delz;
+  double r  = region->contact[icmin].r;
+
+  // collision point = particle pushed onto surface
+  xscoll[0] = xs[0] - dx;
+  xscoll[1] = xs[1] - dy;
+  xscoll[2] = xs[2] - dz;
+
+  // wall point at moment of collision -- for a static region wall this is
+  // the same as xscoll. For a moving wall it's also xscoll in the inexact
+  // approximation (we don't track the wall's trajectory during the step).
+  xbcoll[0] = xscoll[0];
+  xbcoll[1] = xscoll[1];
+  xbcoll[2] = xscoll[2];
+
+  // Reflection normal = direction from particle BACK into the gas region.
+  // In BOTH the interior=1 (gas inside) and interior=0 (gas outside) cases,
+  // the opposite-side surface function (via the flip trick above) populates
+  // contact[].delxyz as "surface point -> particle". That vector always
+  // points AWAY from the gas (in the escape direction). So -delxyz/r always
+  // points back into the gas, regardless of side. (Previous code incorrectly
+  // flipped sign on interior=0, which produced an inward-pointing normal
+  // for side=out regions -- i.e., bi-concave / convex-bump punches.)
+  double scale = (r > 0.0) ? 1.0 / r : 0.0;
+  norm[0] = -dx * scale;
+  norm[1] = -dy * scale;
+  norm[2] = -dz * scale;
+
+  // Phase 3: wall velocity at the contact point (translation + rotation +
+  // varshape radial speed). Stashed in vwall_contact for slip_region /
+  // noslip's REGIONWALL branch to add to vsnew. Zero for static regions.
+  if (region->dynamic_check())
+    region->velocity_contact(vwall_contact, xs, icmin);
+  else
+    vwall_contact[0] = vwall_contact[1] = vwall_contact[2] = 0.0;
+}
+
+/* ----------------------------------------------------------------------
+   SLIP collision with a region-defined wall.
+   Mirrors slip_wall (full thermalization at Tsrd + add wall-surface
+   velocity), but with the wall velocity being a general 3-vector at the
+   contact point rather than an axis-aligned scalar.
+
+   Phase 1: static region -> contact velocity is zero, so no velocity
+   addition. Phase 3 will pull the wall velocity from
+   region->velocity_contact(vwall, xscoll, iwall).
+
+   Note: like slip_wall, this fully resamples all three velocity components
+   from a Gaussian at Tsrd (it is effectively a thermal/no-slip wall in
+   classic SRD style; see comment near slip_wall for details on the
+   convention vs. the doc page).
+------------------------------------------------------------------------- */
+
+void FixSRD::slip_region(double *vs, Big * /*big*/, double * /*xsurf*/,
+                         double *norm, double *vsnew)
+{
+  double vs_dot_n, scale, r1, r2, vnmag, vtmag1, vtmag2;
+  double tangent1[3], tangent2[3];
+
+  vs_dot_n = vs[0] * norm[0] + vs[1] * norm[1] + vs[2] * norm[2];
+
+  tangent1[0] = vs[0] - vs_dot_n * norm[0];
+  tangent1[1] = vs[1] - vs_dot_n * norm[1];
+  tangent1[2] = vs[2] - vs_dot_n * norm[2];
+  double tlen = sqrt(tangent1[0] * tangent1[0] + tangent1[1] * tangent1[1] +
+                     tangent1[2] * tangent1[2]);
+
+  if (tlen > 0.0) {
+    scale = 1.0 / tlen;
+    tangent1[0] *= scale;
+    tangent1[1] *= scale;
+    tangent1[2] *= scale;
+  } else {
+    // SRD velocity is purely along the normal: pick an arbitrary tangent
+    // perpendicular to norm. Use the axis least aligned with norm.
+    int axis = 0;
+    if (fabs(norm[1]) < fabs(norm[axis])) axis = 1;
+    if (fabs(norm[2]) < fabs(norm[axis])) axis = 2;
+    double e[3] = {0.0, 0.0, 0.0};
+    e[axis] = 1.0;
+    tangent1[0] = e[0] - norm[0] * norm[axis];
+    tangent1[1] = e[1] - norm[1] * norm[axis];
+    tangent1[2] = e[2] - norm[2] * norm[axis];
+    scale = 1.0 / sqrt(tangent1[0] * tangent1[0] + tangent1[1] * tangent1[1] +
+                       tangent1[2] * tangent1[2]);
+    tangent1[0] *= scale;
+    tangent1[1] *= scale;
+    tangent1[2] *= scale;
+  }
+
+  tangent2[0] = norm[1] * tangent1[2] - norm[2] * tangent1[1];
+  tangent2[1] = norm[2] * tangent1[0] - norm[0] * tangent1[2];
+  tangent2[2] = norm[0] * tangent1[1] - norm[1] * tangent1[0];
+
+  while (true) {
+    r1 = sigma * random->gaussian();
+    r2 = sigma * random->gaussian();
+    vnmag = sqrt(r1 * r1 + r2 * r2);
+    vtmag1 = sigma * random->gaussian();
+    vtmag2 = sigma * random->gaussian();
+    if (vnmag * vnmag + vtmag1 * vtmag1 + vtmag2 * vtmag2 <= vmaxsq) break;
+  }
+
+  vsnew[0] = vnmag * norm[0] + vtmag1 * tangent1[0] + vtmag2 * tangent2[0];
+  vsnew[1] = vnmag * norm[1] + vtmag1 * tangent1[1] + vtmag2 * tangent2[1];
+  vsnew[2] = vnmag * norm[2] + vtmag1 * tangent1[2] + vtmag2 * tangent2[2];
+
+  // Phase 3: add the wall's surface velocity at the contact point
+  // (stashed by collision_regionwall_inexact). Zero for static regions,
+  // so this is a no-op for the Phase 1.5 path.
+  vsnew[0] += vwall_contact[0];
+  vsnew[1] += vwall_contact[1];
+  vsnew[2] += vwall_contact[2];
+}
+
+/* ----------------------------------------------------------------------
+   impart force on a region wall.
+   force = -dp/dt of the SRD particle; identical formula to force_wall,
+   accumulated into the per-region-fix fwall[3] for that wall.
+------------------------------------------------------------------------- */
+
+void FixSRD::force_regionwall(double *vsold, double *vsnew, Big *big)
+{
+  double dpdt[3];
+
+  double factor = mass_srd / dt_big / force->ftm2v;
+  dpdt[0] = factor * (vsnew[0] - vsold[0]);
+  dpdt[1] = factor * (vsnew[1] - vsold[1]);
+  dpdt[2] = factor * (vsnew[2] - vsold[2]);
+
+  double *fw = regionwall_fix[big->rwall_index]->fwall;
+  fw[0] -= dpdt[0];
+  fw[1] -= dpdt[1];
+  fw[2] -= dpdt[2];
 }
 
 /* ----------------------------------------------------------------------

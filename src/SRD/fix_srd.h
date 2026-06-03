@@ -64,6 +64,19 @@ class FixSRD : public Fix {
   double **fwall;
   double walltrigger;
 
+  // region-defined walls (cylinder/sphere/intersect/etc. via fix wall/srd/region)
+  // Phase 1: static regions, inexact collision only.
+  int regionwall_exist, n_regionwall;
+  class FixWallSRDRegion **regionwall_fix;
+  double phantom_M;          // target bulk SRD count per cell for virtual fill;
+                             // = NSRD * V_cell / V_fluid where V_fluid is the
+                             // total volume confined by all region walls.
+                             // Differs from srd_per_cell (= NSRD / N_cells_box),
+                             // which divides by ALL cells incl. wall material.
+  double vwall_contact[3];   // wall velocity at most recent region-wall contact
+                             // (Phase 3: set by collision_regionwall_inexact,
+                             // read by slip_region and noslip's REGIONWALL branch).
+
   class AtomVecEllipsoid *avec_ellipsoid;
   class AtomVecLine *avec_line;
   class AtomVecTri *avec_tri;
@@ -95,7 +108,7 @@ class FixSRD : public Fix {
 
   struct Big {
     int index;               // local index of particle/wall
-    int type;                // SPHERE or ELLIPSOID or LINE or TRI or WALL
+    int type;                // SPHERE or ELLIPSOID or LINE or TRI or WALL or REGIONWALL
     double radius, radsq;    // radius of sphere
     double aradsqinv;        // 3 ellipsoid radii
     double bradsqinv;
@@ -107,6 +120,10 @@ class FixSRD : public Fix {
     double ex[3], ey[3], ez[3];    // current orientation vecs for ellipsoid/tri
     double norm[3];                // current unit normal of tri in space-frame
     double theta;                  // current orientation of line
+    // for REGIONWALL: direct pointer to the Region (geometry queries)
+    // and index into regionwall_fix[] (force accumulation target)
+    class Region *region;
+    int rwall_index;
   };
 
   Big *biglist;      // list of info for each owned & ghost big and wall
@@ -186,6 +203,8 @@ class FixSRD : public Fix {
   // private functions
 
   void reset_velocities();
+  void inject_virtual_particles();   // Lamura/Gompper virtual fill for curved walls
+  void compute_phantom_target_density();  // MC-estimate V_fluid -> phantom_M
   void vbin_comm(int);
   void vbin_pack(BinAve *, int, int *, double *);
   void vbin_unpack(double *, BinAve *, int, int *);
@@ -202,6 +221,7 @@ class FixSRD : public Fix {
   int inside_line(double *, double *, double *, double *, Big *, double);
   int inside_tri(double *, double *, double *, double *, Big *, double);
   int inside_wall(double *, int);
+  int inside_regionwall(double *, Big *);
 
   double collision_sphere_exact(double *, double *, double *, double *, Big *, double *, double *,
                                 double *);
@@ -215,13 +235,16 @@ class FixSRD : public Fix {
                              double *, double *);
   double collision_wall_exact(double *, int, double *, double *, double *, double *);
   void collision_wall_inexact(double *, int, double *, double *, double *);
+  void collision_regionwall_inexact(double *, Big *, double *, double *, double *);
 
   void slip(double *, double *, double *, Big *, double *, double *, double *);
   void slip_wall(double *, int, double *, double *);
+  void slip_region(double *, Big *, double *, double *, double *);
   void noslip(double *, double *, double *, Big *, int, double *, double *, double *);
 
   void force_torque(double *, double *, double *, double *, double *, double *);
   void force_wall(double *, double *, int);
+  void force_regionwall(double *, double *, Big *);
 
   int update_srd(int, double, double *, double *, double *, double *);
 

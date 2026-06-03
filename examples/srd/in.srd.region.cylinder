@@ -1,0 +1,48 @@
+# Phase 2: SRD gas confined inside a cylinder region (axis = z).
+# Same plumbing as in.srd.region.test1 but with region cylinder instead
+# of region sphere. The whole point of the Region-based architecture: this
+# input should require NO new code.
+
+units           lj
+atom_style      atomic
+dimension       3
+
+variable        Rcyl    equal 5.0
+variable        Hcyl    equal 8.0          # half-height (cyl spans -H..+H)
+variable        Lpad    equal 1.0
+variable        Tsrd    equal 1.0
+variable        msrd    equal 0.01
+
+variable        Lx      equal ${Rcyl}+${Lpad}
+variable        Lz      equal ${Hcyl}+${Lpad}
+region          box block -${Lx} ${Lx} -${Lx} ${Lx} -${Lz} ${Lz}
+create_box      1 box
+
+# cylinder along z-axis, centered at origin, radius Rcyl, span -Hcyl..+Hcyl
+region          gas cylinder z 0 0 ${Rcyl} -${Hcyl} ${Hcyl} side in
+lattice         sc 20.0
+create_atoms    1 region gas
+mass            1 ${msrd}
+velocity        all create ${Tsrd} 12345 loop geom
+
+atom_modify     first empty
+group           empty type 2
+neighbor        0.3 bin
+neigh_modify    delay 1 every 1 check no
+comm_modify     group empty
+
+timestep        0.02
+
+fix             1 all srd 1 NULL ${Tsrd} 1.0 49894 collision slip shift yes 73221
+fix             2 all wall/srd/region gas phantom yes
+
+# Radial density profile across the cylinder cross-section.
+# Project to (x,y) plane via 2D cylindrical chunks.
+compute         shells all chunk/atom bin/cylinder z lower ${Hcyl} 0 0 0 ${Rcyl} 40 &
+                units box discard yes
+fix             prof all ave/chunk 10 400 4000 shells density/number &
+                ave one file density.cyl.profile
+
+thermo_style    custom step atoms temp f_1[9] f_2[1] f_2[2] f_2[3]
+thermo          500
+run             5000

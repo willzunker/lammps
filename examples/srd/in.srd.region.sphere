@@ -1,0 +1,57 @@
+# 3D SRD gas confined inside a sphere region (fix wall/srd/region test)
+# Phase 1.5 smoke test: no leaks, particle count conserved, T ~ Tsrd.
+
+units           lj
+atom_style      atomic
+dimension       3
+
+# big enough box that the sphere fits with a small padding
+region          box block -6 6 -6 6 -6 6
+create_box      1 box
+
+# pack SRD particles densely inside a sphere of radius 5
+region          gas sphere 0 0 0 5 side in
+lattice         sc 5.0
+create_atoms    1 region gas
+mass            1 0.01
+
+# initialise velocities
+velocity        all create 1.0 12345 loop geom
+
+# SRD plumbing -- minimal, matches in.srd.pure
+neighbor        0.3 bin
+neigh_modify    delay 1 every 1 check no
+
+# Need a "first" empty group for the SRD-only comm trick used in in.srd.pure
+# (we don't have big particles, so SRDs are the only atoms).
+atom_modify     first empty
+group           empty type 2
+comm_modify     group empty
+
+timestep        0.02
+
+# fix srd: lambda=1.0, Tsrd=1.0, slip collision
+# Need shift on for Galilean invariance, which is also what spreads the
+# random-shift averaging over the curved wall (necessary but not sufficient,
+# hence the virtual-particle code in inject_virtual_particles).
+fix             1 all srd 1 NULL 1.0 0.25 49894 collision slip shift yes 73221
+
+# the new bit: confine SRDs inside the sphere region using region wall
+fix             2 all wall/srd/region gas
+
+# diagnostics:
+#   f_1[8]  = SRD temperature (Tbin)
+#   f_1[10] = # of SRD/wall collisions this period (cumulative? -- check)
+#   f_2 is the per-fix output vector from wall/srd/region: net force on wall
+# diagnostics:
+#   atoms          = SRD count (must be conserved = 2601)
+#   temp           = LAMMPS kinetic temperature
+#   f_1[2]         = # SRDs that had a collision THIS STEP
+#   f_1[3]         = # of SRD/big collisions THIS STEP  (incl. wall)
+#   f_1[9]         = SRD bin-averaged temperature
+#   f_1[12]        = cumulative # of SRD reneighborings due to motion
+#   f_2[1..3]      = force on region wall THIS STEP (zeroed each step)
+thermo_style    custom step atoms temp f_1[2] f_1[3] f_1[9] f_2[1] f_2[2] f_2[3]
+thermo          100
+
+run             2000

@@ -1717,6 +1717,12 @@ void FixSRD::collisions_single()
           if (ibounce == 0) ncollide++;
           ibounce++;
           if (ibounce < maxbounceallow || maxbounceallow == 0) collide_flag = 1;
+          // Phase 4 defensive cap for region walls: compound regions at
+          // sub-region rim corners can in pathological cases fail to find
+          // a push-back contact even with the sub-region fallback. Without
+          // this cap, the default maxbounceallow=0 leads to infinite loops.
+          // 50 bounces is far more than any well-posed SRD step ever needs.
+          if (type == REGIONWALL && ibounce >= 50) collide_flag = 0;
           dt = t_remain;
           break;
         }
@@ -2861,28 +2867,64 @@ void FixSRD::collision_regionwall_inexact(double *xs, Big *big, double *xscoll,
   int nc = region->surface(xs[0], xs[1], xs[2], BIG);
   region->interior = saved_interior;
 
-  if (nc == 0) {
-    // Shouldn't happen: inside_regionwall said the SRD escaped, so the
-    // opposite-side surface query should yield a contact. Bail safely by
-    // leaving the SRD where it is with an outward normal; the SRD will be
-    // caught next step (or the srdlo/srdhi escape check will fire).
+  // Picked contact info, filled below (either by compound primary path,
+  // by the compound-aware sub-region fallback, or by the bail-out).
+  double dx = 0.0, dy = 0.0, dz = 0.0, r = 0.0;
+  int found = 0;
+  int picked_subregion = -1;  // index into reglist[] if compound
+
+  if (nc > 0) {
+    // pick the closest contact
+    int icmin = 0;
+    for (int ic = 1; ic < nc; ic++)
+      if (region->contact[ic].r < region->contact[icmin].r) icmin = ic;
+    dx = region->contact[icmin].delx;
+    dy = region->contact[icmin].dely;
+    dz = region->contact[icmin].delz;
+    r  = region->contact[icmin].r;
+    found = 1;
+  } else if (region->nregion > 0) {
+    // Phase 4: compound region (intersect / union) returned no contact.
+    // This happens at "rim" points where the SRD has escaped through the
+    // intersection of two sub-region boundaries: each sub-region's surface
+    // point falls in the OTHER sub-region's exterior, so the intersect's
+    // surface_exterior filter drops every contact.
+    // Fallback: walk the sub-regions ourselves, pick the closest push-back
+    // from any sub-region the SRD has actually escaped.
+    for (int k = 0; k < region->nregion; k++) {
+      Region *sub = region->reglist[k];
+      if (sub->match(xs[0], xs[1], xs[2])) continue;  // not escaped from this one
+      int s_saved = sub->interior;
+      sub->interior = 1 - s_saved;
+      int snc = sub->surface(xs[0], xs[1], xs[2], BIG);
+      sub->interior = s_saved;
+      if (snc == 0) continue;
+      int icmin = 0;
+      for (int ic = 1; ic < snc; ic++)
+        if (sub->contact[ic].r < sub->contact[icmin].r) icmin = ic;
+      double sr = sub->contact[icmin].r;
+      if (!found || sr < r) {
+        dx = sub->contact[icmin].delx;
+        dy = sub->contact[icmin].dely;
+        dz = sub->contact[icmin].delz;
+        r  = sr;
+        picked_subregion = k;
+        found = 1;
+      }
+    }
+  }
+
+  if (!found) {
+    // Genuine no-contact bail (no sub-regions or all sub-regions failed).
+    // Set xscoll = xs and norm to an arbitrary safe direction. The bounce
+    // cap in collisions_single will break out of the while-loop so we
+    // don't infinite-loop here.
     xscoll[0] = xs[0]; xscoll[1] = xs[1]; xscoll[2] = xs[2];
     xbcoll[0] = xs[0]; xbcoll[1] = xs[1]; xbcoll[2] = xs[2];
     norm[0] = 1.0; norm[1] = 0.0; norm[2] = 0.0;
     vwall_contact[0] = vwall_contact[1] = vwall_contact[2] = 0.0;
     return;
   }
-
-  // pick the closest contact (relevant for compound regions; for plain
-  // sphere/cylinder there's only one contact anyway)
-  int icmin = 0;
-  for (int ic = 1; ic < nc; ic++)
-    if (region->contact[ic].r < region->contact[icmin].r) icmin = ic;
-
-  double dx = region->contact[icmin].delx;
-  double dy = region->contact[icmin].dely;
-  double dz = region->contact[icmin].delz;
-  double r  = region->contact[icmin].r;
 
   // collision point = particle pushed onto surface
   xscoll[0] = xs[0] - dx;
@@ -2912,8 +2954,15 @@ void FixSRD::collision_regionwall_inexact(double *xs, Big *big, double *xscoll,
   // Phase 3: wall velocity at the contact point (translation + rotation +
   // varshape radial speed). Stashed in vwall_contact for slip_region /
   // noslip's REGIONWALL branch to add to vsnew. Zero for static regions.
-  if (region->dynamic_check())
-    region->velocity_contact(vwall_contact, xs, icmin);
+  // For the compound fallback path (picked_subregion >= 0), the contact
+  // came from a sub-region rather than the compound -- query velocity on
+  // that sub-region (the compound's contact[] wasn't populated by our
+  // manual loop). Index 0 because each sub-region only had one chosen
+  // contact in our fallback loop.
+  Region *vregion = (picked_subregion >= 0) ? region->reglist[picked_subregion]
+                                            : region;
+  if (vregion->dynamic_check())
+    vregion->velocity_contact(vwall_contact, xs, 0);
   else
     vwall_contact[0] = vwall_contact[1] = vwall_contact[2] = 0.0;
 }

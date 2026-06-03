@@ -1,0 +1,68 @@
+# Phase 4: bi-convex tablet die via region intersect (compound region).
+#
+# Geometry:
+#   - die cylinder, radius R_die, height 2H
+#   - upper cup = sphere with center BELOW z_face_upper (in the gas cavity),
+#     side=in -> gas is INSIDE the sphere. Cup surface is the upper part of
+#     this sphere where it intersects the die.
+#   - lower cup = mirror image
+#   - cavity = die ∩ upper_cup ∩ lower_cup  (region intersect)
+#
+# This validates that fix wall/srd/region works on a compound (intersect)
+# region -- the flip-interior trick in collision_regionwall_inexact should
+# compose correctly with region_intersect's own internal sub-region flip.
+
+units           lj
+atom_style      atomic
+dimension       3
+
+variable        R_die         equal 4.0
+variable        H             equal 8.0           # die half-height
+variable        z_face_upper  equal  4.0          # upper punch face level
+variable        z_face_lower  equal -4.0
+variable        d_cup         equal 0.5           # cup depth (shallow)
+# Sphere radius from cap-edge=R_die and depth=d_cup:
+#   R_cup = (R_die^2 + d_cup^2) / (2*d_cup)
+variable        R_cup         equal (${R_die}*${R_die}+${d_cup}*${d_cup})/(2.0*${d_cup})
+# Sphere center sits z_face +/- (R_cup - d_cup) on the gas side of the face.
+variable        zc_upper      equal ${z_face_upper}+${d_cup}-${R_cup}
+variable        zc_lower      equal ${z_face_lower}-${d_cup}+${R_cup}
+
+variable        Tsrd          equal 1.0
+variable        msrd          equal 0.01
+variable        Lpad          equal 1.0
+
+variable        Lx equal ${R_die}+${Lpad}
+variable        Lz equal ${H}+${Lpad}
+region          box block -${Lx} ${Lx} -${Lx} ${Lx} -${Lz} ${Lz}
+create_box      1 box
+
+# Compound region for the bi-convex cavity.
+region          die         cylinder z 0 0 ${R_die} -${H} ${H} side in units box
+region          upper_cup   sphere 0 0 ${zc_upper} ${R_cup} side in units box
+region          lower_cup   sphere 0 0 ${zc_lower} ${R_cup} side in units box
+region          cavity      intersect 3 die upper_cup lower_cup
+
+lattice         sc 20.0
+create_atoms    1 region cavity
+mass            1 ${msrd}
+velocity        all create ${Tsrd} 12345 loop geom
+
+atom_modify     first empty
+group           empty type 2
+neighbor        0.3 bin
+neigh_modify    delay 1 every 1 check no
+comm_modify     group empty
+
+timestep        0.02
+
+fix             1 all srd 1 NULL ${Tsrd} 1.0 49894 collision slip shift yes 73221
+
+# THIS is the Phase 4 test: a single fix wall/srd/region on a COMPOUND region.
+# If region intersect's surface_exterior composes correctly with our flip-
+# interior trick, SRDs will stay confined to the bi-convex cavity.
+fix             2 all wall/srd/region cavity phantom yes
+
+thermo_style    custom step atoms temp f_1[9] f_2[1] f_2[2] f_2[3]
+thermo          200
+run             2000

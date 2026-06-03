@@ -1,0 +1,80 @@
+# Phase 4 follow-on: bi-convex tablet die with moving punches.
+# Upper punch translates down, lower punch translates up, compressing
+# the gas in the bi-convex cavity. This is the actual tablet press
+# scenario (without granular powder yet -- that's the MDR coupling step).
+#
+# The geometry uses region intersect, plus region cylinder move + sphere
+# move for the punches. The cup geometry is encoded in the spheres'
+# positions which translate together with the "punch face" displacement.
+
+units           lj
+atom_style      atomic
+dimension       3
+
+variable        R_die         equal 4.0
+variable        H             equal 8.0
+variable        z_face_upper0 equal  4.0          # initial upper face level
+variable        z_face_lower0 equal -4.0
+variable        d_cup         equal 0.5
+variable        R_cup         equal (${R_die}*${R_die}+${d_cup}*${d_cup})/(2.0*${d_cup})
+
+# Punch displacement: linear ramp. Negative for upper (moves down toward gas);
+# positive for lower (moves up). Symmetric compression.
+variable        vpunch        equal 0.05          # speed of each punch (LJ/time)
+variable        dz_upper      equal vdisplace(0,-${vpunch})
+variable        dz_lower      equal vdisplace(0, ${vpunch})
+
+# Initial cup sphere centers (fixed offset from the FACE; the face moves):
+variable        zc_upper0     equal ${z_face_upper0}+${d_cup}-${R_cup}
+variable        zc_lower0     equal ${z_face_lower0}-${d_cup}+${R_cup}
+
+variable        Tsrd          equal 1.0
+variable        msrd          equal 0.01
+
+variable        Lpad          equal 1.0
+variable        Lx            equal ${R_die}+${Lpad}
+variable        Lz            equal ${H}+${Lpad}
+region          box block -${Lx} ${Lx} -${Lx} ${Lx} -${Lz} ${Lz}
+create_box      1 box
+
+# Fill atoms in the *initial* cavity (use a non-moving fill region).
+region          die_fill        cylinder z 0 0 ${R_die} -${H} ${H} side in units box
+region          upper_cup_fill  sphere 0 0 ${zc_upper0} ${R_cup} side in units box
+region          lower_cup_fill  sphere 0 0 ${zc_lower0} ${R_cup} side in units box
+region          cavity_fill     intersect 3 die_fill upper_cup_fill lower_cup_fill
+
+lattice         sc 20.0
+create_atoms    1 region cavity_fill
+mass            1 ${msrd}
+velocity        all create ${Tsrd} 12345 loop geom
+
+atom_modify     first empty
+group           empty type 2
+neighbor        0.3 bin
+neigh_modify    delay 1 every 1 check no
+comm_modify     group empty
+
+timestep        0.02
+
+# Moving compound region: punches translate along z.
+# Note: only the cup spheres need to move (z-translation). The die cylinder
+# is fixed.
+region          die        cylinder z 0 0 ${R_die} -${H} ${H} side in units box
+region          upper_cup  sphere 0 0 ${zc_upper0} ${R_cup} side in units box &
+                move NULL NULL v_dz_upper
+region          lower_cup  sphere 0 0 ${zc_lower0} ${R_cup} side in units box &
+                move NULL NULL v_dz_lower
+region          cavity     intersect 3 die upper_cup lower_cup
+
+fix             1 all srd 1 NULL ${Tsrd} 1.0 49894 collision slip shift yes 73221
+fix             2 all wall/srd/region cavity phantom yes
+
+# Diagnostics: as the cavity shrinks, gas density rises -> pressure rises.
+# Wall force vector magnitude grows. SRD bin temperature should stay near
+# Tsrd (thermal slip walls). Track wall force magnitude per step.
+variable        fmag equal sqrt(f_2[1]*f_2[1]+f_2[2]*f_2[2]+f_2[3]*f_2[3])
+variable        dz   equal "v_dz_upper - v_dz_lower"   # cavity height change
+
+thermo_style    custom step atoms temp f_1[9] v_dz v_fmag
+thermo          100
+run             1000

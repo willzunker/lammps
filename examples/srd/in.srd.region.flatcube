@@ -1,0 +1,76 @@
+# Cross-check: P-V curve for a CUBE with FLAT planar walls (using the
+# pre-existing fix wall/srd, our trusted reference) compressed to match
+# the bi-convex test's volume range. Bulk EOS (P*V = N*kT, isothermal)
+# is shape-independent, so flat-cube pressure should match bi-convex
+# pressure at matching V.
+#
+# This validates the bi-convex P-V result against the existing planar
+# wall implementation that has been used by LAMMPS users for years.
+
+units           lj
+atom_style      atomic
+dimension       3
+
+# Match the bi-convex test: N=8621 atoms, T=1, m=0.01, initial V ~= 427.
+# For a cube of V=427: L = V^(1/3) = 7.53 LJ. Use L_half = 3.765.
+variable        L_half0       equal 3.765
+variable        vpunch        equal 0.025      # match bi-convex punch speed
+# z_face positions translate inward: zhi shrinks from +L_half0, zlo from -L_half0.
+variable        z_hi          equal ${L_half0}-vdisplace(0,${vpunch})
+variable        z_lo          equal -${L_half0}+vdisplace(0,${vpunch})
+variable        Tsrd          equal 1.0
+variable        msrd          equal 0.01
+variable        Lpad          equal 1.0
+
+boundary        f f f
+
+variable        box_hi equal ${L_half0}+${Lpad}
+variable        box_lo equal -${L_half0}-${Lpad}
+region          box block ${box_lo} ${box_hi} ${box_lo} ${box_hi} ${box_lo} ${box_hi}
+create_box      1 box
+
+variable        L_half_neg equal -${L_half0}
+region          fill block ${L_half_neg} ${L_half0} ${L_half_neg} ${L_half0} &
+                            ${L_half_neg} ${L_half0} units box
+lattice         sc 20.3
+create_atoms    1 region fill
+mass            1 ${msrd}
+velocity        all create ${Tsrd} 12345 loop geom
+
+atom_modify     first empty
+group           empty type 2
+neighbor        0.3 bin
+neigh_modify    delay 1 every 1 check no
+comm_modify     group empty
+
+timestep        0.02
+
+# Static x and y walls (square cross-section), moving zlo/zhi punches.
+# This is the original (trusted) fix wall/srd implementation.
+fix             1 all srd 1 NULL ${Tsrd} 0.95 49894 collision slip shift yes 73221 overlap yes
+fix             walls all wall/srd &
+                xlo ${L_half_neg} xhi ${L_half0} &
+                ylo ${L_half_neg} yhi ${L_half0} &
+                zlo v_z_lo  zhi v_z_hi units box
+
+# Track wall force on the top (zhi) face -- f_walls is a 6x3 array.
+# Indexing in fix wall/srd: f_walls[i][j] where i is wall index (in order
+# given), j is x/y/z (1/2/3). zhi was the 6th wall declared -> index 6.
+variable        Fz_top equal f_walls[6][3]
+
+# Cube volume = side_z * L_face^2 where side_z = z_hi - z_lo.
+variable        side_z   equal v_z_hi-v_z_lo
+variable        V_cavity equal v_side_z*(2*${L_half0})*(2*${L_half0})
+variable        N_srd    equal count(all)
+variable        P_ideal  equal v_N_srd*${Tsrd}/v_V_cavity
+# Pressure from force: F_z / area(face). Face area = (2*L_half0)^2.
+variable        face_A   equal (2*${L_half0})*(2*${L_half0})
+variable        P_meas   equal v_Fz_top/v_face_A
+
+# Window average so noise doesn't dominate.
+fix             pavg all ave/time 1 400 400 v_P_meas v_P_ideal v_V_cavity &
+                file pv_flatcube.dat
+
+thermo_style    custom step atoms temp v_side_z v_V_cavity v_P_ideal v_P_meas
+thermo          400
+run             4000

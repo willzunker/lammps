@@ -1,0 +1,85 @@
+# P-V curve under bi-convex compression.
+# As the cavity volume shrinks, gas pressure should rise per ideal-gas EOS:
+#   P*V = N*kT  (isothermal, since thermal walls thermostat the gas)
+# So P*V should be approximately constant ~= N*kT throughout.
+#
+# Pressure inferred from wall force magnitude on a punch / punch face area.
+# Punch face area approximated as pi * R_die^2 (the bowl is shallow so the
+# area enhancement is small).
+
+units           lj
+atom_style      atomic
+dimension       3
+
+variable        R_die         equal 4.0
+variable        H             equal 8.0
+variable        z_face_upper0 equal  4.0
+variable        z_face_lower0 equal -4.0
+variable        d_cup         equal 0.5
+variable        R_cup         equal (${R_die}*${R_die}+${d_cup}*${d_cup})/(2.0*${d_cup})
+variable        vpunch        equal 0.025
+variable        dz_upper      equal vdisplace(0,-${vpunch})
+variable        dz_lower      equal vdisplace(0, ${vpunch})
+variable        zc_upper0     equal ${z_face_upper0}+${d_cup}-${R_cup}
+variable        zc_lower0     equal ${z_face_lower0}-${d_cup}+${R_cup}
+variable        Tsrd          equal 1.0
+variable        msrd          equal 0.01
+
+variable        Lpad equal 1.0
+variable        Lx equal ${R_die}+${Lpad}
+variable        Lz equal ${H}+${Lpad}
+region          box block -${Lx} ${Lx} -${Lx} ${Lx} -${Lz} ${Lz}
+create_box      1 box
+
+region          die_fill        cylinder z 0 0 ${R_die} -${H} ${H} side in units box
+region          upper_cup_fill  sphere 0 0 ${zc_upper0} ${R_cup} side in units box
+region          lower_cup_fill  sphere 0 0 ${zc_lower0} ${R_cup} side in units box
+region          cavity_fill     intersect 3 die_fill upper_cup_fill lower_cup_fill
+lattice         sc 20.0
+create_atoms    1 region cavity_fill
+mass            1 ${msrd}
+velocity        all create ${Tsrd} 12345 loop geom
+
+atom_modify     first empty
+group           empty type 2
+neighbor        0.3 bin
+neigh_modify    delay 1 every 1 check no
+comm_modify     group empty
+
+timestep        0.02
+
+region          die        cylinder z 0 0 ${R_die} -${H} ${H} side in units box
+region          upper_cup  sphere 0 0 ${zc_upper0} ${R_cup} side in units box &
+                move NULL NULL v_dz_upper
+region          lower_cup  sphere 0 0 ${zc_lower0} ${R_cup} side in units box &
+                move NULL NULL v_dz_lower
+
+fix             1 all srd 1 NULL ${Tsrd} 1.0 49894 collision slip shift yes 73221
+fix             wall_die   all wall/srd/region die       phantom yes
+fix             wall_upper all wall/srd/region upper_cup phantom yes
+fix             wall_lower all wall/srd/region lower_cup phantom yes
+
+# Pressure proxy: upper punch face z-force / pi*R_die^2.
+# Use time-averaged force in 400-step windows so noise doesn't dominate.
+fix             fz_avg all ave/time 1 400 400 f_wall_upper[3] &
+                file fz_upper.dat
+
+# Analytic cavity volume. For a bi-convex die: V = pi*R_die^2*(H_cavity)
+# + (volume of two spherical caps). H_cavity = z_face_upper - z_face_lower
+# at current time. Both face levels translate with dz_upper / dz_lower.
+variable        z_face_upper equal ${z_face_upper0}+v_dz_upper
+variable        z_face_lower equal ${z_face_lower0}+v_dz_lower
+variable        Hcav         equal v_z_face_upper-v_z_face_lower
+# Cylindrical part between the rims (height Hcav between z_face_lower and z_face_upper):
+variable        V_cyl_part   equal PI*${R_die}*${R_die}*v_Hcav
+# Two shallow spherical-cap bulges: V_cap = (pi/6) * d * (3*R_die^2 + d^2) each.
+variable        V_caps       equal (PI/6.0)*${d_cup}*(3*${R_die}*${R_die}+${d_cup}*${d_cup})*2
+variable        V_cavity     equal v_V_cyl_part+v_V_caps
+
+# Ideal-gas pressure expected: P = N*kT / V_cavity
+variable        N_srd        equal 8621
+variable        P_ideal      equal v_N_srd*${Tsrd}/v_V_cavity
+
+thermo_style    custom step atoms temp v_Hcav v_V_cavity v_P_ideal f_wall_upper[3]
+thermo          400
+run             4000

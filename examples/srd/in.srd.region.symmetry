@@ -1,0 +1,77 @@
+# Top-bottom symmetry test for bi-convex compression.
+# Uses THREE separate fix wall/srd/region (die, upper cup, lower cup) so we
+# can read per-surface time-averaged force. Symmetric compression should
+# give:
+#   <F_upper_z> = -<F_lower_z>  (equal magnitude, opposite sign)
+#   <F_die>   = (0, 0, 0)        (no axial preferred direction)
+# within statistics.
+
+units           lj
+atom_style      atomic
+dimension       3
+
+variable        R_die         equal 4.0
+variable        H             equal 8.0
+variable        z_face_upper0 equal  4.0
+variable        z_face_lower0 equal -4.0
+variable        d_cup         equal 0.5
+variable        R_cup         equal (${R_die}*${R_die}+${d_cup}*${d_cup})/(2.0*${d_cup})
+variable        vpunch        equal 0.05
+variable        dz_upper      equal vdisplace(0,-${vpunch})
+variable        dz_lower      equal vdisplace(0, ${vpunch})
+variable        zc_upper0     equal ${z_face_upper0}+${d_cup}-${R_cup}
+variable        zc_lower0     equal ${z_face_lower0}-${d_cup}+${R_cup}
+variable        Tsrd          equal 1.0
+variable        msrd          equal 0.01
+
+variable        Lpad          equal 1.0
+variable        Lx            equal ${R_die}+${Lpad}
+variable        Lz            equal ${H}+${Lpad}
+region          box block -${Lx} ${Lx} -${Lx} ${Lx} -${Lz} ${Lz}
+create_box      1 box
+
+# fill: initial cavity
+region          die_fill        cylinder z 0 0 ${R_die} -${H} ${H} side in units box
+region          upper_cup_fill  sphere 0 0 ${zc_upper0} ${R_cup} side in units box
+region          lower_cup_fill  sphere 0 0 ${zc_lower0} ${R_cup} side in units box
+region          cavity_fill     intersect 3 die_fill upper_cup_fill lower_cup_fill
+lattice         sc 20.0
+create_atoms    1 region cavity_fill
+mass            1 ${msrd}
+velocity        all create ${Tsrd} 12345 loop geom
+
+atom_modify     first empty
+group           empty type 2
+neighbor        0.3 bin
+neigh_modify    delay 1 every 1 check no
+comm_modify     group empty
+
+timestep        0.02
+
+# THREE separate primitive region walls so we can read per-surface force.
+# (NB: the cylinder is static; the two caps translate symmetrically.)
+region          die        cylinder z 0 0 ${R_die} -${H} ${H} side in units box
+region          upper_cup  sphere 0 0 ${zc_upper0} ${R_cup} side in units box &
+                move NULL NULL v_dz_upper
+region          lower_cup  sphere 0 0 ${zc_lower0} ${R_cup} side in units box &
+                move NULL NULL v_dz_lower
+
+fix             1 all srd 1 NULL ${Tsrd} 1.0 49894 collision slip shift yes 73221
+fix             wall_die    all wall/srd/region die       phantom yes
+fix             wall_upper  all wall/srd/region upper_cup phantom yes
+fix             wall_lower  all wall/srd/region lower_cup phantom yes
+
+# Time-average force on each wall over the whole run.
+fix             avg_die   all ave/time 1 800 800 &
+                f_wall_die[1] f_wall_die[2] f_wall_die[3] &
+                file force.die.dat
+fix             avg_upper all ave/time 1 800 800 &
+                f_wall_upper[1] f_wall_upper[2] f_wall_upper[3] &
+                file force.upper.dat
+fix             avg_lower all ave/time 1 800 800 &
+                f_wall_lower[1] f_wall_lower[2] f_wall_lower[3] &
+                file force.lower.dat
+
+thermo_style    custom step atoms temp f_1[9]
+thermo          200
+run             800

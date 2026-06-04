@@ -409,12 +409,11 @@ void FixSRD::init()
       if (strcmp(modify->fix[m]->style, "wall/srd/region") == 0)
         regionwall_fix[k++] = dynamic_cast<FixWallSRDRegion *>(modify->fix[m]);
     // Phase 1: no exact collision-time solver for region walls, and
-    // collisions_multi() requires exact solvers. Forbid the combination
-    // until Phase 5 adds per-region-style exact solvers.
-    if (overlap == 1)
-      error->all(FLERR,
-                 "Fix wall/srd/region cannot be combined with fix srd "
-                 "overlap=yes in Phase 1 (no exact collision solver yet).");
+    // overlap=yes is supported. In collisions_multi(), REGIONWALL contacts
+    // use the inexact push-to-surface (t_remain = 0.5*dt) since we don't
+    // have an exact-time solver for region walls yet -- the relative
+    // ordering with sphere/wall exact collisions is therefore approximate,
+    // but the wall reflection itself is correct.
     // Phase 1.5: virtual-particle injection assumes orthogonal cubic bins.
     // For a triclinic box, cell geometry would need a lamda-coordinate
     // transform that we haven't implemented yet. Error out rather than
@@ -1800,8 +1799,7 @@ void FixSRD::collisions_multi()
         else if (type == TRIANGLE)
           inside = inside_tri(x[i], x[j], v[i], v[j], big, dt);
         else if (type == REGIONWALL)
-          // defensive: init() errors out before we get here, but be safe
-          error->one(FLERR, "Region walls not supported with overlap=yes (Phase 1)");
+          inside = inside_regionwall(x[i], big);
         else
           inside = inside_wall(x[i], j);
 
@@ -1814,7 +1812,13 @@ void FixSRD::collisions_multi()
             t_remain = collision_line_exact(x[i], x[j], v[i], v[j], big, dt, xscoll, xbcoll, norm);
           else if (type == TRIANGLE)
             t_remain = collision_tri_exact(x[i], x[j], v[i], v[j], big, dt, xscoll, xbcoll, norm);
-          else
+          else if (type == REGIONWALL) {
+            // No exact-time solver for region walls yet; fall back to inexact.
+            // The "first collision" ordering vs sphere/wall exact times is
+            // therefore approximate, but the wall reflection itself is correct.
+            t_remain = 0.5 * dt;
+            collision_regionwall_inexact(x[i], big, xscoll, xbcoll, norm);
+          } else
             t_remain = collision_wall_exact(x[i], j, v[i], xscoll, xbcoll, norm);
 
 #ifdef SRD_DEBUG
@@ -1875,15 +1879,19 @@ void FixSRD::collisions_multi()
       norm[2] = normfirst[2];
 
       if (collidestyle == SLIP) {
-        if (type != WALL)
-          slip(v[i], v[j], x[j], big, xscoll, norm, vsnew);
-        else
+        if (type == WALL)
           slip_wall(v[i], j, norm, vsnew);
-      } else {
-        if (type != WALL)
-          noslip(v[i], v[j], x[j], big, -1, xscoll, norm, vsnew);
+        else if (type == REGIONWALL)
+          slip_region(v[i], big, xscoll, norm, vsnew);
         else
+          slip(v[i], v[j], x[j], big, xscoll, norm, vsnew);
+      } else {
+        if (type == WALL)
           noslip(v[i], nullptr, x[j], big, j, xscoll, norm, vsnew);
+        else if (type == REGIONWALL)
+          noslip(v[i], nullptr, xscoll, big, -1, xscoll, norm, vsnew);
+        else
+          noslip(v[i], v[j], x[j], big, -1, xscoll, norm, vsnew);
       }
 
       if (dimension == 2) vsnew[2] = 0.0;
@@ -1903,10 +1911,12 @@ void FixSRD::collisions_multi()
 
       if (collidestyle == SLIP && type == SPHERE)
         force_torque(v[i], vsnew, xscoll, xbcoll, f[j], nullptr);
-      else if (type != WALL)
-        force_torque(v[i], vsnew, xscoll, xbcoll, f[j], torque[j]);
       else if (type == WALL)
         force_wall(v[i], vsnew, j);
+      else if (type == REGIONWALL)
+        force_regionwall(v[i], vsnew, big);
+      else
+        force_torque(v[i], vsnew, xscoll, xbcoll, f[j], torque[j]);
 
       ibin = binsrd[i] = update_srd(i, t_first, xscoll, vsnew, x[i], v[i]);
 
